@@ -34,7 +34,7 @@ function setupGeneratorSheets() {
   SpreadsheetApp.getUi().alert(
     'Complete demo workspace created.\n\n' +
     `Output folder: ${folder.getUrl()}\n\n` +
-    'Next: select rows 3:5 in R-DOC-GEN or columns B:D in C-DOC-GEN, open the sidebar, and click Generate.'
+    'Next: select rows 3:5 in R-DOC-GEN or item columns C:E in C-DOC-GEN, open the sidebar, and click Generate.'
   );
 }
 
@@ -72,7 +72,9 @@ function getHealthCheckReport() {
       report.ok = report.ok && validation.errors.length === 0;
       report.checks.push({ ok: validation.errors.length === 0, label: 'Current selection is generation-ready' });
     } else {
-      report.warnings.push('No active row/column selection to validate.');
+      report.warnings.push(activeSheet.getName() === COLUMN_MODE_SHEET
+        ? 'No item columns selected. Select C:E or later in C-DOC-GEN.'
+        : 'No active row selection to validate.');
     }
   } else {
     report.warnings.push(`Active sheet is not ${ROW_MODE_SHEET} or ${COLUMN_MODE_SHEET}.`);
@@ -157,11 +159,15 @@ function _validateGenerationRequestRuntime_(rawOptions, requestedSheetName) {
     ? Array.from(_getSelectedRows(ss, sheetName)).sort((a, b) => a - b)
     : Array.from(_getSelectedColumns(ss, sheetName)).sort((a, b) => a - b);
 
-  if (!selectedItems.length) errors.push(`No valid selection found in ${sheetName}.`);
+  if (!selectedItems.length) {
+    errors.push(sheetName === COLUMN_MODE_SHEET
+      ? `No valid item columns selected in ${sheetName}. Select column C or later; column B is only for readable field names.`
+      : `No valid selection found in ${sheetName}.`);
+  }
 
   const sheetData = sheet.getDataRange().getDisplayValues();
   const placeholderMap = sheetName === ROW_MODE_SHEET ? _buildPlaceholderMap(sheetData[0] || [], 4) : _buildColumnPlaceholderMap(sheetData, 4);
-  if (!Object.keys(placeholderMap).length) errors.push('No placeholders found. Use {{Name}} headers/labels in the replacement area.');
+  if (!Object.keys(placeholderMap).length) errors.push('No placeholders found. Use readable field labels so the setup formulas can create {{Name}} labels.');
 
   const itemTypes = { docs: [], slides: [], sheets: [], unsupported: [] };
   const relevantData = [];
@@ -256,7 +262,24 @@ function _getSelectionDetailsBaseRuntime_() {
     }
   });
 
-  return { sheetName, mimeTypes: Array.from(mimeTypes), selectedIndices, invalidItems, message: selectedIndices.length ? '' : 'Select one or more valid rows or columns to process.' };
+  return { sheetName, mimeTypes: Array.from(mimeTypes), selectedIndices, invalidItems, message: selectedIndices.length ? '' : sheetName === COLUMN_MODE_SHEET ? 'Select one or more item columns starting at C. Column B is only for readable field names.' : 'Select one or more valid rows to process.' };
+}
+
+function _getSelectedColumns(ss, sheetName) {
+  const selectedColumns = new Set();
+  const rangeList = ss.getActiveRangeList();
+  if (!rangeList) return selectedColumns;
+  const minimumColumn = sheetName === COLUMN_MODE_SHEET ? 3 : 2;
+
+  rangeList.getRanges().forEach((range) => {
+    if (range.getSheet().getName() !== sheetName) return;
+    for (let i = 0; i < range.getNumColumns(); i++) {
+      const column = range.getColumn() + i;
+      if (column >= minimumColumn) selectedColumns.add(column);
+    }
+  });
+
+  return selectedColumns;
 }
 
 function _createDemoTemplatesRuntime_(folder) {
@@ -300,13 +323,14 @@ function _createDemoTemplatesRuntime_(folder) {
 function _setupRowModeSheetRuntime_(ss, folder, templates) {
   const sheet = _getOrCreateSheet(ss, ROW_MODE_SHEET);
   sheet.clear();
-  sheet.getRange(1, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', '{{Name}}', '{{Activity}}', '{{Score}}', '{{Remarks}}']]);
+  sheet.getRange(1, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', '="{{"&E2&"}}"', '="{{"&F2&"}}"', '="{{"&G2&"}}"', '="{{"&H2&"}}"']]);
   sheet.getRange(2, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', 'Name', 'Activity', 'Score', 'Remarks']]);
   sheet.getRange(3, 1, 3, 8).setValues([
     [templates.docId, folder.getId(), '', 'Demo Document Output', 'Juan Dela Cruz', 'Activity 1', '95', 'Excellent work'],
     [templates.slideId, folder.getId(), '', 'Demo Slides Output', 'Maria Santos', 'Activity 2', '92', 'Ready for presentation'],
     [templates.sheetId, folder.getId(), '', 'Demo Sheet Output', 'Pedro Reyes', 'Activity 3', '88', 'For review'],
   ]);
+  sheet.getRange('E1:H1').setNote('Generated from readable labels in row 2. Edit row 2 labels to update placeholders automatically.');
   sheet.setFrozenRows(2);
   sheet.autoResizeColumns(1, 8);
 }
@@ -314,19 +338,20 @@ function _setupRowModeSheetRuntime_(ss, folder, templates) {
 function _setupColumnModeSheetRuntime_(ss, folder, templates) {
   const sheet = _getOrCreateSheet(ss, COLUMN_MODE_SHEET);
   sheet.clear();
-  sheet.getRange(1, 1, 8, 4).setValues([
-    ['Template ID', templates.docId, templates.slideId, templates.sheetId],
-    ['Folder ID', folder.getId(), folder.getId(), folder.getId()],
-    ['Recipient Email', '', '', ''],
-    ['Output Name', 'Column Demo Document', 'Column Demo Slides', 'Column Demo Sheet'],
-    ['{{Name}}', 'Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes'],
-    ['{{Activity}}', 'Column Activity 1', 'Column Activity 2', 'Column Activity 3'],
-    ['{{Score}}', '95', '92', '88'],
-    ['{{Remarks}}', 'Excellent work', 'Ready for presentation', 'For review'],
+  sheet.getRange(1, 1, 8, 5).setValues([
+    ['Template ID', 'Readable Field Name', templates.docId, templates.slideId, templates.sheetId],
+    ['Folder ID', '', folder.getId(), folder.getId(), folder.getId()],
+    ['Recipient Email', '', '', '', ''],
+    ['Output Name', '', 'Column Demo Document', 'Column Demo Slides', 'Column Demo Sheet'],
+    ['="{{"&B5&"}}"', 'Name', 'Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes'],
+    ['="{{"&B6&"}}"', 'Activity', 'Column Activity 1', 'Column Activity 2', 'Column Activity 3'],
+    ['="{{"&B7&"}}"', 'Score', '95', '92', '88'],
+    ['="{{"&B8&"}}"', 'Remarks', 'Excellent work', 'Ready for presentation', 'For review'],
   ]);
+  sheet.getRange('A5:A8').setNote('Generated from readable labels in column B. Edit column B labels to update placeholders automatically.');
   sheet.setFrozenRows(1);
-  sheet.setFrozenColumns(1);
-  sheet.autoResizeColumns(1, 4);
+  sheet.setFrozenColumns(2);
+  sheet.autoResizeColumns(1, 5);
 }
 
 function _setupEmailSheetRuntime_(ss) {
@@ -347,11 +372,12 @@ function _validateSheetContractRuntime_(report, ss, sheetName) {
   if (sheetName === ROW_MODE_SHEET) {
     _addHealthCheckRuntime_(report, data[0] && data[0][0] === 'Template ID', 'R-DOC-GEN has Template ID header', 'R-DOC-GEN column A should be Template ID.');
     _addHealthCheckRuntime_(report, data[0] && data[0][1] === 'Folder ID', 'R-DOC-GEN has Folder ID header', 'R-DOC-GEN column B should be Folder ID.');
-    _addHealthCheckRuntime_(report, Object.keys(_buildPlaceholderMap(data[0] || [], 4)).length > 0, 'R-DOC-GEN has placeholders', 'Add placeholder headers from column E onward.');
+    _addHealthCheckRuntime_(report, Object.keys(_buildPlaceholderMap(data[0] || [], 4)).length > 0, 'R-DOC-GEN has formula-generated placeholders', 'Add readable labels in row 2 from column E onward.');
   } else if (sheetName === COLUMN_MODE_SHEET) {
     _addHealthCheckRuntime_(report, data[0] && data[0][0] === 'Template ID', 'C-DOC-GEN has Template ID row', 'C-DOC-GEN row 1 should be Template ID.');
     _addHealthCheckRuntime_(report, data[1] && data[1][0] === 'Folder ID', 'C-DOC-GEN has Folder ID row', 'C-DOC-GEN row 2 should be Folder ID.');
-    _addHealthCheckRuntime_(report, Object.keys(_buildColumnPlaceholderMap(data, 4)).length > 0, 'C-DOC-GEN has placeholders', 'Add placeholder labels from row 5 downward.');
+    _addHealthCheckRuntime_(report, data[0] && data[0][1] === 'Readable Field Name', 'C-DOC-GEN has readable field-name helper column', 'C-DOC-GEN column B should contain readable field names.');
+    _addHealthCheckRuntime_(report, Object.keys(_buildColumnPlaceholderMap(data, 4)).length > 0, 'C-DOC-GEN has formula-generated placeholders', 'Add readable labels in column B from row 5 downward.');
   }
 }
 
