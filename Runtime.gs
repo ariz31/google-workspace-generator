@@ -315,7 +315,6 @@ function _setupColumnModeSheetRuntime_(ss, folder, templates) {
   const sheet = _getOrCreateSheet(ss, COLUMN_MODE_SHEET);
   sheet.clear();
   sheet.getRange(1, 1, 8, 4).setValues([
-    ['Field', 'Doc Item', 'Slide Item', 'Sheet Item'],
     ['Template ID', templates.docId, templates.slideId, templates.sheetId],
     ['Folder ID', folder.getId(), folder.getId(), folder.getId()],
     ['Recipient Email', '', '', ''],
@@ -323,8 +322,8 @@ function _setupColumnModeSheetRuntime_(ss, folder, templates) {
     ['{{Name}}', 'Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes'],
     ['{{Activity}}', 'Column Activity 1', 'Column Activity 2', 'Column Activity 3'],
     ['{{Score}}', '95', '92', '88'],
+    ['{{Remarks}}', 'Excellent work', 'Ready for presentation', 'For review'],
   ]);
-  sheet.getRange(9, 1, 1, 4).setValues([['{{Remarks}}', 'Excellent work', 'Ready for presentation', 'For review']]);
   sheet.setFrozenRows(1);
   sheet.setFrozenColumns(1);
   sheet.autoResizeColumns(1, 4);
@@ -350,8 +349,8 @@ function _validateSheetContractRuntime_(report, ss, sheetName) {
     _addHealthCheckRuntime_(report, data[0] && data[0][1] === 'Folder ID', 'R-DOC-GEN has Folder ID header', 'R-DOC-GEN column B should be Folder ID.');
     _addHealthCheckRuntime_(report, Object.keys(_buildPlaceholderMap(data[0] || [], 4)).length > 0, 'R-DOC-GEN has placeholders', 'Add placeholder headers from column E onward.');
   } else if (sheetName === COLUMN_MODE_SHEET) {
-    _addHealthCheckRuntime_(report, data[1] && data[1][0] === 'Template ID', 'C-DOC-GEN has Template ID row', 'C-DOC-GEN row 2 should be Template ID.');
-    _addHealthCheckRuntime_(report, data[2] && data[2][0] === 'Folder ID', 'C-DOC-GEN has Folder ID row', 'C-DOC-GEN row 3 should be Folder ID.');
+    _addHealthCheckRuntime_(report, data[0] && data[0][0] === 'Template ID', 'C-DOC-GEN has Template ID row', 'C-DOC-GEN row 1 should be Template ID.');
+    _addHealthCheckRuntime_(report, data[1] && data[1][0] === 'Folder ID', 'C-DOC-GEN has Folder ID row', 'C-DOC-GEN row 2 should be Folder ID.');
     _addHealthCheckRuntime_(report, Object.keys(_buildColumnPlaceholderMap(data, 4)).length > 0, 'C-DOC-GEN has placeholders', 'Add placeholder labels from row 5 downward.');
   }
 }
