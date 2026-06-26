@@ -1,0 +1,3 @@
+function runtimeHardeningLoaded() {
+  return true;
+}
