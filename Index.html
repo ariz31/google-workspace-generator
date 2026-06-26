@@ -1,5 +1,47 @@
 <!DOCTYPE html>
-<html>
-<head><base target="_top"><title>Google Workspace Generator</title></head>
-<body><h1>Google Workspace Generator</h1></body>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Workspace Generator</title>
+  <style>
+    body{margin:0;background:#f8fafc;color:#0f172a;font-family:Arial,Helvetica,sans-serif;line-height:1.5}main{width:min(1000px,calc(100% - 32px));margin:auto;padding:32px 0}.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}.card{background:#fff;border:1px solid #dbe4ef;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(15,23,42,.08)}input,textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:12px;padding:11px;font:inherit}textarea{min-height:240px;font-family:monospace}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}label{display:block;margin:12px 0 6px;font-weight:700}.toggle{display:flex;gap:8px;align-items:center}.toggle input{width:auto}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button{border:0;border-radius:999px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#2563eb;color:#fff}.secondary{background:#e2e8f0;color:#1e293b}.status{display:none;margin-top:14px;border-radius:12px;padding:11px;font-weight:700}.info{display:block;color:#1d4ed8;background:#dbeafe}.success{display:block;color:#15803d;background:#dcfce7}.error{display:block;color:#b91c1c;background:#fee2e2}.resource,.stat{border:1px solid #dbe4ef;border-radius:12px;background:#f8fafc;padding:12px;margin-top:10px}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}a{color:#2563eb;font-weight:700;word-break:break-word}@media(max-width:800px){.layout,.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Google Workspace Generator</h1>
+    <p>Create a Drive workspace with Docs, Sheets, and Slides. Use the spreadsheet sidebar for template merging and batch generation.</p>
+    <section class="layout">
+      <form id="form" class="card">
+        <h2>Standalone workspace</h2>
+        <label for="workspaceName">Workspace name</label><input id="workspaceName" value="Generated Workspace" required>
+        <label for="description">Description</label><input id="description" value="Created with Google Workspace Generator.">
+        <div class="grid">
+          <div><label for="docs">Docs</label><input id="docs" type="number" min="0" max="20" value="1"></div>
+          <div><label for="sheets">Sheets</label><input id="sheets" type="number" min="0" max="20" value="1"></div>
+          <div><label for="slides">Slides</label><input id="slides" type="number" min="0" max="20" value="1"></div>
+        </div>
+        <label class="toggle"><input id="advanced" type="checkbox"> Use advanced JSON</label>
+        <label for="json">Advanced JSON</label><textarea id="json" spellcheck="false"></textarea>
+        <div class="row"><button id="generate" class="primary" type="submit">Generate workspace</button><button id="preview" class="secondary" type="button">Preview JSON</button><button id="reset" class="secondary" type="button">Reset</button></div>
+        <div id="status" class="status" role="status"></div>
+      </form>
+      <aside class="card"><h2>Results</h2><p>Generated links will appear here.</p><div id="results"></div></aside>
+    </section>
+  </main>
+  <script>
+    const fallback={workspaceName:'Generated Workspace',description:'Created with Google Workspace Generator.',documents:[{name:'Project Brief',body:'Purpose\n\nScope\n\nDeliverables'}],spreadsheets:[{name:'Tracker',sheets:[{name:'Tasks',values:[['Task','Owner','Status'],['Example','','Not started']]}]}],presentations:[{name:'Overview Deck',title:'Generated Workspace',subtitle:'Created with Google Workspace Generator'}]};
+    const $=id=>document.getElementById(id);
+    $('form').addEventListener('submit',submitForm);$('preview').addEventListener('click',()=>{setJson(buildConfig());$('advanced').checked=true;setStatus('success','JSON preview updated.')});$('reset').addEventListener('click',resetSample);init();
+    function init(){if(window.google&&google.script&&google.script.run)google.script.run.withSuccessHandler(c=>setJson(c||fallback)).withFailureHandler(()=>setJson(fallback)).getDefaultWorkspaceConfig();else{setJson(fallback);setStatus('info','Local preview mode. Deploy with Apps Script to generate files.')}}
+    function submitForm(e){e.preventDefault();$('results').innerHTML='';let config;try{config=$('advanced').checked?JSON.parse($('json').value):buildConfig()}catch(err){setStatus('error','Invalid JSON: '+err.message);return}const msg=validate(config);if(msg){setStatus('error',msg);return}setBusy(true);setStatus('info','Creating workspace...');google.script.run.withSuccessHandler(r=>{setBusy(false);setStatus('success','Workspace created.');render(r)}).withFailureHandler(err=>{setBusy(false);setStatus('error',err&&err.message?err.message:String(err))}).generateWorkspace(config)}
+    function buildConfig(){const name=$('workspaceName').value.trim();return{workspaceName:name,description:$('description').value.trim(),documents:Array.from({length:count('docs')},(_,i)=>({name:`${name||'Workspace'} Doc ${i+1}`,body:'Generated document.'})),spreadsheets:Array.from({length:count('sheets')},(_,i)=>({name:`${name||'Workspace'} Sheet ${i+1}`,sheets:[{name:'Tracker',values:[['Item','Owner','Status'],['','','']]}]})),presentations:Array.from({length:count('slides')},(_,i)=>({name:`${name||'Workspace'} Deck ${i+1}`,title:name||'Generated Workspace',subtitle:'Created with Google Workspace Generator'}))}}
+    function validate(c){if(!c||!String(c.workspaceName||'').trim())return'Workspace name is required.';const t=arr(c.documents).length+arr(c.spreadsheets).length+arr(c.presentations).length;if(t<1)return'Choose at least one file.';if(t>50)return'Maximum total files allowed: 50.';return''}
+    function count(id){const n=parseInt($(id).value,10);return Number.isFinite(n)?Math.max(0,Math.min(20,n)):0}function arr(v){return Array.isArray(v)?v:[]}function setJson(c){$('json').value=JSON.stringify(c,null,2)}function setBusy(v){$('generate').disabled=v;$('generate').textContent=v?'Generating...':'Generate workspace'}function setStatus(t,m){$('status').className='status '+t;$('status').textContent=m}function resetSample(){setJson(fallback);$('workspaceName').value=fallback.workspaceName;$('description').value=fallback.description;$('docs').value=1;$('sheets').value=1;$('slides').value=1;setStatus('success','Sample restored.')}
+    function render(r){const s=r.summary||{},res=r.resources||[],f=r.workspace||{};$('results').innerHTML=`<div class="resource"><strong>${esc(f.name||'Workspace')}</strong><br><a href="${attr(f.url)}" target="_blank">Open folder</a></div><div class="stats"><div class="stat">Files<br><strong>${s.totalFiles||res.length}</strong></div><div class="stat">Docs<br><strong>${s.documents||0}</strong></div><div class="stat">Sheets<br><strong>${s.spreadsheets||0}</strong></div><div class="stat">Slides<br><strong>${s.presentations||0}</strong></div></div>`+res.map(x=>`<div class="resource"><strong>${esc(x.name)}</strong><br><small>${esc(x.type)}</small><br><a href="${attr(x.url)}" target="_blank">Open file</a></div>`).join('')}
+    function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}function attr(v){return esc(v||'#')}
+  </script>
+</body>
 </html>
