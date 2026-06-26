@@ -1,83 +1,84 @@
 # Architecture
 
-Google Workspace Generator is a small Google Apps Script web app.
+Google Workspace Generator is a root-level Google Apps Script productivity suite. It has two user interfaces backed by one `Code.gs` file.
 
 ## Runtime
 
-- Frontend: `src/Index.html`
-- Backend: `src/Code.gs`
+- Backend: `Code.gs`
+- Spreadsheet sidebar UI: `Sidebar.html`
+- Standalone web app UI: `Index.html`
+- Manifest: `appsscript.json`
 - Platform: Google Apps Script V8 runtime
-- Output: generated files in Google Drive
+- Output: generated Google Drive, Docs, Sheets, Slides, and PDF files
 
-## Request flow
+## Workflows
 
-1. The user opens the deployed web app.
-2. `Index.html` renders the form.
-3. The UI calls `generateWorkspace(config)` with `google.script.run`.
-4. `Code.gs` validates and normalizes the input.
-5. A Drive folder is created.
-6. Docs, Sheets, and Slides files are created.
-7. Files are moved into the generated folder.
-8. Resource links are returned to the UI.
+### Spreadsheet-bound template generator
 
-## Backend responsibilities
+1. The spreadsheet opens and `onOpen()` adds the **Productivity Suite** menu.
+2. The user runs **Setup Generator Sheets** or manually prepares `R-DOC-GEN`, `C-DOC-GEN`, and `EMAIL`.
+3. The user selects rows or columns.
+4. `Sidebar.html` calls `getSelectionDetails()` to inspect the active selection.
+5. The user chooses output options and calls `runGenerator(options, sheetName)`.
+6. `Code.gs` stores generation state in `PropertiesService`.
+7. `continueGeneration()` processes batches and schedules follow-up triggers when needed.
+8. The sidebar polls `getGenerationStatus()` until the run completes.
+9. Outputs and errors are written to the sidebar and to the `Log` sheet.
 
-`Code.gs` handles:
+### Standalone web app generator
 
-- The web app entry point through `doGet()`.
-- Sample configuration through `getDefaultConfig()`.
-- Workspace creation through `generateWorkspace(config)`.
-- Input normalization and validation.
-- Google Drive, Docs, Sheets, and Slides file creation.
-- Returning a structured result object to the UI.
+1. The deployed web app loads `Index.html` from `doGet()`.
+2. The UI calls `getDefaultWorkspaceConfig()` for sample JSON.
+3. The user submits guided input or advanced JSON.
+4. `generateWorkspace(config)` creates a Drive folder and basic Docs, Sheets, and Slides.
+5. Resource links are returned to the browser.
 
-## Frontend responsibilities
+## Spreadsheet data contracts
 
-`Index.html` handles:
+### `R-DOC-GEN`
 
-- Guided workspace configuration.
-- Advanced JSON editing.
-- Client-side validation.
-- Backend calls with `google.script.run`.
-- Rendering generated file links.
+- Column A: template file ID
+- Column B: destination folder ID
+- Column C: optional recipient email
+- Column D: output name
+- Column E onward: placeholder values with headers like `{{Name}}`
 
-## Configuration shape
+### `C-DOC-GEN`
 
-```json
-{
-  "workspaceName": "Generated Workspace",
-  "description": "Created with Google Workspace Generator.",
-  "documents": [
-    { "name": "Project Brief", "body": "Document body" }
-  ],
-  "spreadsheets": [
-    {
-      "name": "Tracker",
-      "sheets": [
-        { "name": "Tasks", "values": [["Task", "Owner"], ["", ""]] }
-      ]
-    }
-  ],
-  "presentations": [
-    { "name": "Overview Deck", "title": "Generated Workspace", "subtitle": "Created with Google Workspace Generator" }
-  ]
-}
-```
+- Row 1: template file ID per item column
+- Row 2: destination folder ID
+- Row 3: optional recipient email
+- Row 4: output name
+- Row 5 onward: placeholder values with labels like `{{Name}}` in column A
 
-## Safety limits
+## Placeholder behavior
 
-The generator uses limits in `Code.gs` to prevent accidental quota-heavy runs:
+Supported placeholder forms:
 
-- File count limits by type and total.
-- File name length limits.
-- Description and document body length limits.
-- Spreadsheet row and column limits.
+- `{{Name}}` plain replacement
+- `{{Name}u}}` uppercase
+- `{{Name}b}}` bold
+- `{{Name}ub}}` uppercase and bold
+- `{{Name}1}}` title case
+- `{{Name}1b}}` title case and bold
+
+Docs and Slides also attempt to replace image placeholders when the value is an image URL or a Drive image file ID.
+
+## Safety and reliability choices
+
+- Generation runs in batches to reduce Apps Script timeout risk.
+- State is stored per user through `PropertiesService.getUserProperties()`.
+- Triggers are cleaned up before a new run and after completion or cancellation.
+- Logging failures are swallowed so a bad log sheet does not break file generation.
+- `Sidebar.html` escapes rendered output links and messages.
+- Root files are the canonical clasp source; the old `src/` scaffold has been removed.
 
 ## Extension points
 
-Useful next improvements:
+Useful future improvements:
 
-1. Add template duplication support with optional template IDs.
-2. Add optional sharing rules for generated files.
-3. Add audit logging to a spreadsheet.
-4. Add preset workspace types for classes, projects, reports, or events.
+1. Add automated tests for pure validation and placeholder helpers.
+2. Add optional role-based sharing controls for generated files.
+3. Add a preset template library.
+4. Add a status dashboard sheet for long-running jobs.
+5. Add CI that verifies root Apps Script files are present before deployment.
