@@ -2,65 +2,67 @@
 
 ## Prerequisites
 
-- Node.js installed locally.
-- A Google account with Apps Script access.
-- The clasp CLI, installed through this repo with `npm install`.
+- Node.js
+- Google Apps Script access
+- clasp, installed with `npm install`
 
 ## Local setup
 
 ```bash
 npm install
 npm run clasp:login
+npx clasp create --type sheets --title "Google Workspace Generator" --rootDir .
+npm run push
+npm run open
 ```
 
-Create or connect an Apps Script project:
-
-```bash
-npx clasp create --type webapp --title "Google Workspace Generator" --rootDir src
-```
-
-Or copy `.clasp.json.example` to `.clasp.json` and replace `YOUR_SCRIPT_ID_HERE` with an existing Apps Script project ID.
+For an existing Apps Script project, copy `.clasp.json.example` to `.clasp.json`, replace `YOUR_SCRIPT_ID_HERE`, then run `npm run push`.
 
 ## Common commands
 
 ```bash
-npm run push      # Push src/ to Apps Script
-npm run pull      # Pull remote Apps Script files into src/
-npm run open      # Open the Apps Script editor
-npm run status    # Compare local and remote files
-npm run deploy    # Create a clasp deployment
+npm run push
+npm run pull
+npm run open
+npm run status
+npm run deploy
 ```
+
+## Root files
+
+The canonical Apps Script files are now at the repository root:
+
+- `Code.gs`
+- `Sidebar.html`
+- `Index.html`
+- `appsscript.json`
+
+Do not use a `src/` root for clasp unless you intentionally restructure the project again.
 
 ## Manual deployment
 
-Inside the Apps Script editor:
+For spreadsheet-bound use, bind or copy the root files into a Google Sheet Apps Script project. Reload the spreadsheet and use the **Productivity Suite** menu.
 
-1. Click **Deploy > New deployment**.
-2. Choose **Web app**.
-3. Set **Execute as** to **Me**.
-4. Choose the appropriate access setting for your environment.
-5. Click **Deploy** and authorize the required Google Workspace scopes.
+For web-app use, deploy the same project as a web app from Apps Script. `Index.html` is served by `doGet()`.
 
 ## Testing checklist
 
-Before deploying broadly, verify these flows:
-
-- The web app loads without console errors.
-- The guided form can create one Doc, one Sheet, and one Slides file.
-- Advanced JSON can create custom file names and spreadsheet values.
-- Invalid JSON shows a useful error message.
-- Setting all file counts to zero is rejected.
-- Generated files are moved into the generated Drive folder.
-- Links in the result panel open the expected files.
+- Spreadsheet reload shows the menu.
+- Setup creates `R-DOC-GEN`, `C-DOC-GEN`, `EMAIL`, and `Log`.
+- QR generation inserts an image from the selected cell.
+- Sidebar detects row selections in `R-DOC-GEN`.
+- Sidebar detects column selections in `C-DOC-GEN`.
+- Separate Doc, Slide, and Sheet generation works.
+- PDF conversion works for Docs and Slides.
+- Combined Doc, Slide, and Sheet generation works for same-type selections.
+- Email sending works when recipient and template data exist.
+- Cancel stops a running batch.
+- Standalone web app generation works from `Index.html`.
 
 ## Code style
 
-- Keep Apps Script functions small and explicit.
-- Keep public server functions limited to UI entry points.
-- Keep helper functions private by using the trailing underscore naming convention.
-- Avoid requesting scopes that the app does not use.
-- Prefer plain Apps Script services before introducing advanced services.
-
-## Suggested future refactor
-
-For a larger version, split pure validation logic into a shared JavaScript module and add tests around it. Apps Script itself is harder to test locally, so the best test target is the pure normalization and validation layer.
+- Keep root files as the source of truth.
+- Keep HTML-called server functions public.
+- Keep helpers private with trailing underscores.
+- Keep logging non-blocking.
+- Avoid unnecessary OAuth scopes.
