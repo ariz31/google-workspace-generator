@@ -232,6 +232,7 @@
         <div>
           <span class="pill">Standalone workspace generator</span>
           <span class="pill">Spreadsheet template generator</span>
+          <span class="pill">Formula-generated placeholders</span>
           <span class="pill">Docs, Slides, Sheets, PDF</span>
           <span class="pill">Email and logging</span>
           <span class="pill">Health checks</span>
@@ -242,7 +243,7 @@
         <ol>
           <li>Open the bound Google Sheet.</li>
           <li>Use <strong>Productivity Suite &gt; Setup Complete Demo Workspace</strong>.</li>
-          <li>Select rows <code>3:5</code> in <code>R-DOC-GEN</code> or columns <code>B:D</code> in <code>C-DOC-GEN</code>.</li>
+          <li>Select rows <code>3:5</code> in <code>R-DOC-GEN</code> or item columns <code>C:E</code> in <code>C-DOC-GEN</code>.</li>
           <li>Run <strong>Productivity Suite &gt; Run Health Check</strong>.</li>
           <li>Open the sidebar and click <strong>Generate</strong>.</li>
         </ol>
@@ -313,7 +314,8 @@
           <div class="feature-grid">
             <div class="feature"><strong>Workspace creation</strong><span>Create a Drive folder with generated Docs, Sheets, and Slides.</span></div>
             <div class="feature"><strong>Template merging</strong><span>Generate files from existing Google Docs, Slides, and Sheets templates.</span></div>
-            <div class="feature"><strong>Row and column modes</strong><span>Use selected rows or selected columns as generation records.</span></div>
+            <div class="feature"><strong>Formula placeholders</strong><span>Type readable labels and let the setup formulas create the correct placeholders.</span></div>
+            <div class="feature"><strong>Row and column modes</strong><span>Use selected rows or selected item columns as generation records.</span></div>
             <div class="feature"><strong>Formatting placeholders</strong><span>Use normal, uppercase, bold, title case, and title-case bold placeholders.</span></div>
             <div class="feature"><strong>Separate or combined output</strong><span>Create separate files or combine compatible Docs, Slides, or Sheets.</span></div>
             <div class="feature"><strong>PDF output</strong><span>Convert generated Docs and Slides to PDF.</span></div>
@@ -346,7 +348,9 @@
             <li>Reload the spreadsheet.</li>
             <li>Open <strong>Productivity Suite &gt; Setup Complete Demo Workspace</strong>.</li>
             <li>The setup creates demo templates, a Drive folder, and the required sheets.</li>
-            <li>Select valid rows in <code>R-DOC-GEN</code> or valid columns in <code>C-DOC-GEN</code>.</li>
+            <li>In <code>R-DOC-GEN</code>, edit readable labels in row 2; row 1 placeholders update automatically.</li>
+            <li>In <code>C-DOC-GEN</code>, edit readable labels in column B; column A placeholders update automatically.</li>
+            <li>Select valid rows in <code>R-DOC-GEN</code> or valid item columns in <code>C-DOC-GEN</code>.</li>
             <li>Open <strong>Productivity Suite &gt; Run Health Check</strong>.</li>
             <li>Open <strong>Productivity Suite &gt; Open Generator Sidebar</strong>.</li>
             <li>Choose output options and click <strong>Generate</strong>.</li>
@@ -357,32 +361,36 @@
           <h2>R-DOC-GEN row mode</h2>
           <p>Use row mode when each selected row represents one output file.</p>
           <table>
-            <thead><tr><th>Column</th><th>Purpose</th></tr></thead>
+            <thead><tr><th>Area</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td>A</td><td>Template file ID. Use a Google Docs, Slides, or Sheets template ID.</td></tr>
-              <tr><td>B</td><td>Destination Drive folder ID.</td></tr>
-              <tr><td>C</td><td>Recipient email. Optional.</td></tr>
-              <tr><td>D</td><td>Output name.</td></tr>
-              <tr><td>E+</td><td>Placeholder values. Headers should look like <code>{{Name}}</code>, <code>{{Score}}</code>, or <code>{{Activity}}</code>.</td></tr>
+              <tr><td>Column A</td><td>Template file ID. Use a Google Docs, Slides, or Sheets template ID.</td></tr>
+              <tr><td>Column B</td><td>Destination Drive folder ID.</td></tr>
+              <tr><td>Column C</td><td>Recipient email. Optional.</td></tr>
+              <tr><td>Column D</td><td>Output name.</td></tr>
+              <tr><td>Row 2, columns E+</td><td>Readable field labels such as <code>Name</code>, <code>Score</code>, or <code>Activity</code>.</td></tr>
+              <tr><td>Row 1, columns E+</td><td>Formula-generated placeholders such as <code>={{"{{"}}&amp;E2&amp;{{"}}"}}</code>, displayed as <code>{{Name}}</code>.</td></tr>
+              <tr><td>Rows 3+</td><td>Actual generation data. Select rows starting from row <code>3</code>.</td></tr>
             </tbody>
           </table>
-          <p>Select data rows starting from row <code>3</code>. Rows 1 and 2 are reserved for headers and guidance.</p>
+          <p>Edit the readable labels in row 2; the placeholder headers in row 1 update automatically.</p>
         </section>
 
         <section id="column-mode">
           <h2>C-DOC-GEN column mode</h2>
-          <p>Use column mode when each selected column represents one output file.</p>
+          <p>Use column mode when each selected item column represents one output file.</p>
           <table>
-            <thead><tr><th>Row</th><th>Purpose</th></tr></thead>
+            <thead><tr><th>Area</th><th>Purpose</th></tr></thead>
             <tbody>
-              <tr><td>1</td><td>Template file ID per item column.</td></tr>
-              <tr><td>2</td><td>Destination Drive folder ID.</td></tr>
-              <tr><td>3</td><td>Recipient email. Optional.</td></tr>
-              <tr><td>4</td><td>Output name.</td></tr>
-              <tr><td>5+</td><td>Placeholder values. Row labels should look like <code>{{Name}}</code>, <code>{{Score}}</code>, or <code>{{Activity}}</code>.</td></tr>
+              <tr><td>Row 1, columns C+</td><td>Template file ID per item column.</td></tr>
+              <tr><td>Row 2, columns C+</td><td>Destination Drive folder ID.</td></tr>
+              <tr><td>Row 3, columns C+</td><td>Recipient email. Optional.</td></tr>
+              <tr><td>Row 4, columns C+</td><td>Output name.</td></tr>
+              <tr><td>Column B, rows 5+</td><td>Readable field labels such as <code>Title</code>, <code>Class Code</code>, or <code>Course Number</code>.</td></tr>
+              <tr><td>Column A, rows 5+</td><td>Formula-generated placeholders such as <code>={{"{{"}}&amp;B5&amp;{{"}}"}}</code>, displayed as <code>{{Title}}</code>.</td></tr>
+              <tr><td>Columns C+</td><td>Actual item columns. Select item columns starting from column <code>C</code>. Column B is only a helper.</td></tr>
             </tbody>
           </table>
-          <p>Select data columns starting from column <code>B</code>. Column A is reserved for field labels.</p>
+          <p>Edit the readable labels in column B; the placeholder labels in column A update automatically.</p>
         </section>
 
         <section id="placeholders">
@@ -410,7 +418,7 @@
           <h2>Output modes</h2>
           <details open>
             <summary>Separate output</summary>
-            <p>Each selected row or column creates its own generated file. This is the safest default for mixed Docs, Slides, and Sheets templates.</p>
+            <p>Each selected row or item column creates its own generated file. This is the safest default for mixed Docs, Slides, and Sheets templates.</p>
           </details>
           <details>
             <summary>Combined Docs or Slides</summary>
@@ -447,9 +455,10 @@
             <li>Confirm the Productivity Suite menu appears after reloading the Google Sheet.</li>
             <li>Run Setup Complete Demo Workspace.</li>
             <li>Confirm the demo Drive folder and sample templates are created.</li>
+            <li>Confirm readable labels create placeholders automatically in <code>R-DOC-GEN</code> row 1 and <code>C-DOC-GEN</code> column A.</li>
             <li>Select <code>R-DOC-GEN</code> rows <code>3:5</code> and run Health Check.</li>
             <li>Generate separate files from row mode.</li>
-            <li>Select <code>C-DOC-GEN</code> columns <code>B:D</code> and run Health Check.</li>
+            <li>Select <code>C-DOC-GEN</code> item columns <code>C:E</code> and run Health Check.</li>
             <li>Generate separate files from column mode.</li>
             <li>Test invalid template IDs and folder IDs to confirm preflight validation stops the run.</li>
             <li>Test PDF output with Doc or Slide templates.</li>
@@ -470,6 +479,10 @@
           <details>
             <summary>Health check says a folder ID is invalid</summary>
             <p>Check that the destination folder exists and your account can write files into it.</p>
+          </details>
+          <details>
+            <summary>Column mode does not detect column B</summary>
+            <p>Column B is intentionally only a readable field-name helper. Select item columns starting from column C.</p>
           </details>
           <details>
             <summary>Combined output fails</summary>
