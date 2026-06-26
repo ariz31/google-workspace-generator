@@ -30,6 +30,7 @@ function setupGeneratorSheets() {
   _setupColumnModeSheetRuntime_(ss, folder, templates);
   _setupEmailSheetRuntime_(ss);
   _getLogSheet();
+  SpreadsheetApp.flush();
 
   SpreadsheetApp.getUi().alert(
     'Complete demo workspace created.\n\n' +
@@ -323,7 +324,7 @@ function _createDemoTemplatesRuntime_(folder) {
 function _setupRowModeSheetRuntime_(ss, folder, templates) {
   const sheet = _getOrCreateSheet(ss, ROW_MODE_SHEET);
   sheet.clear();
-  sheet.getRange(1, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', '="{{"&E2&"}}"', '="{{"&F2&"}}"', '="{{"&G2&"}}"', '="{{"&H2&"}}"']]);
+  sheet.getRange(1, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', '=IF(LEN(TRIM(E2)),"{{"&TRIM(E2)&"}}","")', '=IF(LEN(TRIM(F2)),"{{"&TRIM(F2)&"}}","")', '=IF(LEN(TRIM(G2)),"{{"&TRIM(G2)&"}}","")', '=IF(LEN(TRIM(H2)),"{{"&TRIM(H2)&"}}","")']]);
   sheet.getRange(2, 1, 1, 8).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', 'Name', 'Activity', 'Score', 'Remarks']]);
   sheet.getRange(3, 1, 3, 8).setValues([
     [templates.docId, folder.getId(), '', 'Demo Document Output', 'Juan Dela Cruz', 'Activity 1', '95', 'Excellent work'],
@@ -343,10 +344,10 @@ function _setupColumnModeSheetRuntime_(ss, folder, templates) {
     ['Folder ID', '', folder.getId(), folder.getId(), folder.getId()],
     ['Recipient Email', '', '', '', ''],
     ['Output Name', '', 'Column Demo Document', 'Column Demo Slides', 'Column Demo Sheet'],
-    ['="{{"&B5&"}}"', 'Name', 'Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes'],
-    ['="{{"&B6&"}}"', 'Activity', 'Column Activity 1', 'Column Activity 2', 'Column Activity 3'],
-    ['="{{"&B7&"}}"', 'Score', '95', '92', '88'],
-    ['="{{"&B8&"}}"', 'Remarks', 'Excellent work', 'Ready for presentation', 'For review'],
+    ['=IF(LEN(TRIM(B5)),"{{"&TRIM(B5)&"}}","")', 'Name', 'Juan Dela Cruz', 'Maria Santos', 'Pedro Reyes'],
+    ['=IF(LEN(TRIM(B6)),"{{"&TRIM(B6)&"}}","")', 'Activity', 'Column Activity 1', 'Column Activity 2', 'Column Activity 3'],
+    ['=IF(LEN(TRIM(B7)),"{{"&TRIM(B7)&"}}","")', 'Score', '95', '92', '88'],
+    ['=IF(LEN(TRIM(B8)),"{{"&TRIM(B8)&"}}","")', 'Remarks', 'Excellent work', 'Ready for presentation', 'For review'],
   ]);
   sheet.getRange('A5:A8').setNote('Generated from readable labels in column B. Edit column B labels to update placeholders automatically.');
   sheet.setFrozenRows(1);
