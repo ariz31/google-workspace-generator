@@ -6,42 +6,640 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Google Workspace Generator</title>
   <style>
-    body{margin:0;background:#f8fafc;color:#0f172a;font-family:Arial,Helvetica,sans-serif;line-height:1.5}main{width:min(1000px,calc(100% - 32px));margin:auto;padding:32px 0}.layout{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}.card{background:#fff;border:1px solid #dbe4ef;border-radius:18px;padding:22px;box-shadow:0 12px 32px rgba(15,23,42,.08)}input,textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:12px;padding:11px;font:inherit}textarea{min-height:240px;font-family:monospace}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}label{display:block;margin:12px 0 6px;font-weight:700}.toggle{display:flex;gap:8px;align-items:center}.toggle input{width:auto}.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}button{border:0;border-radius:999px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#2563eb;color:#fff}.secondary{background:#e2e8f0;color:#1e293b}.status{display:none;margin-top:14px;border-radius:12px;padding:11px;font-weight:700}.info{display:block;color:#1d4ed8;background:#dbeafe}.success{display:block;color:#15803d;background:#dcfce7}.error{display:block;color:#b91c1c;background:#fee2e2}.resource,.stat{border:1px solid #dbe4ef;border-radius:12px;background:#f8fafc;padding:12px;margin-top:10px}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}a{color:#2563eb;font-weight:700;word-break:break-word}@media(max-width:800px){.layout,.grid{grid-template-columns:1fr}}
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe4ef;
+      --blue: #2563eb;
+      --blue-soft: #dbeafe;
+      --green: #15803d;
+      --green-soft: #dcfce7;
+      --red: #b91c1c;
+      --red-soft: #fee2e2;
+      --amber-soft: #fef3c7;
+      --shadow: 0 12px 32px rgba(15, 23, 42, .08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: auto;
+      padding: 32px 0 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 { margin-top: 0; }
+    h3 { margin-bottom: 8px; }
+    p { color: var(--muted); }
+    a { color: var(--blue); font-weight: 700; word-break: break-word; }
+    code {
+      background: #eef2ff;
+      border-radius: 6px;
+      padding: 2px 6px;
+      color: #3730a3;
+      font-size: .95em;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .manual {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .toc {
+      position: sticky;
+      top: 16px;
+    }
+    .toc a {
+      display: block;
+      padding: 8px 0;
+      text-decoration: none;
+      border-bottom: 1px solid #eef2f7;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 11px;
+      font: inherit;
+    }
+    textarea {
+      min-height: 240px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f5f9; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 5px 0; }
+    details {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin: 10px 0;
+      background: #fbfdff;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 800;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .feature {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .feature strong { display: block; margin-bottom: 4px; }
+    .toggle {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .toggle input { width: auto; }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .65; cursor: not-allowed; }
+    .primary { background: var(--blue); color: #fff; }
+    .secondary { background: #e2e8f0; color: #1e293b; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      margin: 4px 6px 4px 0;
+      background: #eef2ff;
+      color: #3730a3;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .notice {
+      border-left: 4px solid var(--blue);
+      background: var(--blue-soft);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #1e3a8a;
+      margin: 12px 0;
+    }
+    .warning {
+      border-left-color: #d97706;
+      background: var(--amber-soft);
+      color: #92400e;
+    }
+    .status {
+      display: none;
+      margin-top: 14px;
+      border-radius: 12px;
+      padding: 11px;
+      font-weight: 700;
+    }
+    .info { display: block; color: #1d4ed8; background: var(--blue-soft); }
+    .success { display: block; color: var(--green); background: var(--green-soft); }
+    .error { display: block; color: var(--red); background: var(--red-soft); }
+    .resource, .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 12px;
+      margin-top: 10px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .small { font-size: 13px; color: var(--muted); }
+    .checklist li::marker { color: var(--green); }
+
+    @media (max-width: 900px) {
+      .hero, .layout, .manual, .grid, .feature-grid { grid-template-columns: 1fr; }
+      .toc { position: static; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>Google Workspace Generator</h1>
-    <p>Create a Drive workspace with Docs, Sheets, and Slides. Use the spreadsheet sidebar for template merging and batch generation.</p>
-    <section class="layout">
+    <section class="hero">
+      <div class="card">
+        <h1>Google Workspace Generator</h1>
+        <p>Create a Drive workspace with Docs, Sheets, and Slides, or use the spreadsheet-bound sidebar to batch-generate files from templates.</p>
+        <div>
+          <span class="pill">Standalone workspace generator</span>
+          <span class="pill">Spreadsheet template generator</span>
+          <span class="pill">Docs, Slides, Sheets, PDF</span>
+          <span class="pill">Email and logging</span>
+          <span class="pill">Health checks</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Recommended first run</h2>
+        <ol>
+          <li>Open the bound Google Sheet.</li>
+          <li>Use <strong>Productivity Suite &gt; Setup Complete Demo Workspace</strong>.</li>
+          <li>Select rows <code>3:5</code> in <code>R-DOC-GEN</code> or columns <code>B:D</code> in <code>C-DOC-GEN</code>.</li>
+          <li>Run <strong>Productivity Suite &gt; Run Health Check</strong>.</li>
+          <li>Open the sidebar and click <strong>Generate</strong>.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="layout" id="workspace-generator">
       <form id="form" class="card">
         <h2>Standalone workspace</h2>
-        <label for="workspaceName">Workspace name</label><input id="workspaceName" value="Generated Workspace" required>
-        <label for="description">Description</label><input id="description" value="Created with Google Workspace Generator.">
+        <p>Use this form when you want to create a new Drive folder with basic Docs, Sheets, and Slides without using spreadsheet templates.</p>
+        <label for="workspaceName">Workspace name</label>
+        <input id="workspaceName" value="Generated Workspace" required>
+
+        <label for="description">Description</label>
+        <input id="description" value="Created with Google Workspace Generator.">
+
         <div class="grid">
           <div><label for="docs">Docs</label><input id="docs" type="number" min="0" max="20" value="1"></div>
           <div><label for="sheets">Sheets</label><input id="sheets" type="number" min="0" max="20" value="1"></div>
           <div><label for="slides">Slides</label><input id="slides" type="number" min="0" max="20" value="1"></div>
         </div>
+
         <label class="toggle"><input id="advanced" type="checkbox"> Use advanced JSON</label>
-        <label for="json">Advanced JSON</label><textarea id="json" spellcheck="false"></textarea>
-        <div class="row"><button id="generate" class="primary" type="submit">Generate workspace</button><button id="preview" class="secondary" type="button">Preview JSON</button><button id="reset" class="secondary" type="button">Reset</button></div>
+        <label for="json">Advanced JSON</label>
+        <textarea id="json" spellcheck="false"></textarea>
+
+        <div class="row">
+          <button id="generate" class="primary" type="submit">Generate workspace</button>
+          <button id="preview" class="secondary" type="button">Preview JSON</button>
+          <button id="reset" class="secondary" type="button">Reset</button>
+        </div>
         <div id="status" class="status" role="status"></div>
       </form>
-      <aside class="card"><h2>Results</h2><p>Generated links will appear here.</p><div id="results"></div></aside>
+
+      <aside class="card">
+        <h2>Results</h2>
+        <p>Generated folder and file links will appear here after a successful run.</p>
+        <div id="results"></div>
+      </aside>
+    </section>
+
+    <section class="manual" id="manual">
+      <aside class="card toc">
+        <h2>Instructions Manual</h2>
+        <a href="#overview">Overview</a>
+        <a href="#features">Features</a>
+        <a href="#standalone">Standalone web app</a>
+        <a href="#spreadsheet">Spreadsheet generator</a>
+        <a href="#row-mode">R-DOC-GEN row mode</a>
+        <a href="#column-mode">C-DOC-GEN column mode</a>
+        <a href="#placeholders">Placeholders and formatting</a>
+        <a href="#output-modes">Output modes</a>
+        <a href="#email-log">Email and logs</a>
+        <a href="#health">Health check and reset</a>
+        <a href="#testing">Testing checklist</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </aside>
+
+      <article class="card">
+        <section id="overview">
+          <h2>Overview</h2>
+          <p>This app has two main workflows. The first workflow is the standalone web app on this page, which creates a new Drive workspace with basic Docs, Sheets, and Slides. The second workflow is the spreadsheet-bound template generator, which uses a Google Sheet plus the sidebar to create many personalized Docs, Slides, Sheets, or PDFs from template IDs.</p>
+          <div class="notice">For the most complete experience, use this project as a Google Sheet-bound Apps Script project and run the demo setup first.</div>
+        </section>
+
+        <section id="features">
+          <h2>Features</h2>
+          <div class="feature-grid">
+            <div class="feature"><strong>Workspace creation</strong><span>Create a Drive folder with generated Docs, Sheets, and Slides.</span></div>
+            <div class="feature"><strong>Template merging</strong><span>Generate files from existing Google Docs, Slides, and Sheets templates.</span></div>
+            <div class="feature"><strong>Row and column modes</strong><span>Use selected rows or selected columns as generation records.</span></div>
+            <div class="feature"><strong>Formatting placeholders</strong><span>Use normal, uppercase, bold, title case, and title-case bold placeholders.</span></div>
+            <div class="feature"><strong>Separate or combined output</strong><span>Create separate files or combine compatible Docs, Slides, or Sheets.</span></div>
+            <div class="feature"><strong>PDF output</strong><span>Convert generated Docs and Slides to PDF.</span></div>
+            <div class="feature"><strong>Email delivery</strong><span>Email generated files when a recipient email exists.</span></div>
+            <div class="feature"><strong>Activity logs</strong><span>Write generation status, file links, folder links, and email status to the Log sheet.</span></div>
+            <div class="feature"><strong>QR code insertion</strong><span>Create a QR code from the active spreadsheet cell.</span></div>
+          </div>
+        </section>
+
+        <section id="standalone">
+          <h2>Standalone web app workflow</h2>
+          <ol>
+            <li>Enter a workspace name and optional description.</li>
+            <li>Choose how many Docs, Sheets, and Slides to create.</li>
+            <li>Click <strong>Preview JSON</strong> if you want to inspect the generated configuration.</li>
+            <li>Turn on <strong>Use advanced JSON</strong> if you want custom file names, document bodies, sheet values, or presentation titles.</li>
+            <li>Click <strong>Generate workspace</strong>.</li>
+            <li>Open the returned folder and file links from the Results panel.</li>
+          </ol>
+          <details>
+            <summary>Advanced JSON structure</summary>
+            <p>The advanced JSON may include <code>workspaceName</code>, <code>description</code>, <code>documents</code>, <code>spreadsheets</code>, and <code>presentations</code>. The app limits very large runs so the Apps Script execution remains manageable.</p>
+          </details>
+        </section>
+
+        <section id="spreadsheet">
+          <h2>Spreadsheet-bound generator workflow</h2>
+          <ol>
+            <li>Push or copy the root project files into a Google Apps Script project bound to a Google Sheet.</li>
+            <li>Reload the spreadsheet.</li>
+            <li>Open <strong>Productivity Suite &gt; Setup Complete Demo Workspace</strong>.</li>
+            <li>The setup creates demo templates, a Drive folder, and the required sheets.</li>
+            <li>Select valid rows in <code>R-DOC-GEN</code> or valid columns in <code>C-DOC-GEN</code>.</li>
+            <li>Open <strong>Productivity Suite &gt; Run Health Check</strong>.</li>
+            <li>Open <strong>Productivity Suite &gt; Open Generator Sidebar</strong>.</li>
+            <li>Choose output options and click <strong>Generate</strong>.</li>
+          </ol>
+        </section>
+
+        <section id="row-mode">
+          <h2>R-DOC-GEN row mode</h2>
+          <p>Use row mode when each selected row represents one output file.</p>
+          <table>
+            <thead><tr><th>Column</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>A</td><td>Template file ID. Use a Google Docs, Slides, or Sheets template ID.</td></tr>
+              <tr><td>B</td><td>Destination Drive folder ID.</td></tr>
+              <tr><td>C</td><td>Recipient email. Optional.</td></tr>
+              <tr><td>D</td><td>Output name.</td></tr>
+              <tr><td>E+</td><td>Placeholder values. Headers should look like <code>{{Name}}</code>, <code>{{Score}}</code>, or <code>{{Activity}}</code>.</td></tr>
+            </tbody>
+          </table>
+          <p>Select data rows starting from row <code>3</code>. Rows 1 and 2 are reserved for headers and guidance.</p>
+        </section>
+
+        <section id="column-mode">
+          <h2>C-DOC-GEN column mode</h2>
+          <p>Use column mode when each selected column represents one output file.</p>
+          <table>
+            <thead><tr><th>Row</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Template file ID per item column.</td></tr>
+              <tr><td>2</td><td>Destination Drive folder ID.</td></tr>
+              <tr><td>3</td><td>Recipient email. Optional.</td></tr>
+              <tr><td>4</td><td>Output name.</td></tr>
+              <tr><td>5+</td><td>Placeholder values. Row labels should look like <code>{{Name}}</code>, <code>{{Score}}</code>, or <code>{{Activity}}</code>.</td></tr>
+            </tbody>
+          </table>
+          <p>Select data columns starting from column <code>B</code>. Column A is reserved for field labels.</p>
+        </section>
+
+        <section id="placeholders">
+          <h2>Placeholders and formatting</h2>
+          <p>Placeholders use the field name inside double braces. Formatting modifiers are placed before the final closing braces.</p>
+          <table>
+            <thead><tr><th>Placeholder</th><th>Effect</th><th>Example output</th></tr></thead>
+            <tbody>
+              <tr><td><code>{{Name}}</code></td><td>Normal replacement</td><td>juan dela cruz</td></tr>
+              <tr><td><code>{{Name}u}}</code></td><td>Uppercase / all caps</td><td>JUAN DELA CRUZ</td></tr>
+              <tr><td><code>{{Name}b}}</code></td><td>Bold</td><td><strong>juan dela cruz</strong></td></tr>
+              <tr><td><code>{{Name}ub}}</code></td><td>Uppercase and bold</td><td><strong>JUAN DELA CRUZ</strong></td></tr>
+              <tr><td><code>{{Name}1}}</code></td><td>Title case</td><td>Juan Dela Cruz</td></tr>
+              <tr><td><code>{{Name}1b}}</code></td><td>Title case and bold</td><td><strong>Juan Dela Cruz</strong></td></tr>
+            </tbody>
+          </table>
+          <div class="notice warning">Docs and Slides support bold formatting as styled text. Emails use HTML bold. Sheets replace text values, but do not apply rich-text bold formatting inside cells.</div>
+          <details>
+            <summary>Image placeholders</summary>
+            <p>If a replacement value is an image URL or an accessible Drive image file ID, the generator can insert it as an image in Docs or Slides where supported.</p>
+          </details>
+        </section>
+
+        <section id="output-modes">
+          <h2>Output modes</h2>
+          <details open>
+            <summary>Separate output</summary>
+            <p>Each selected row or column creates its own generated file. This is the safest default for mixed Docs, Slides, and Sheets templates.</p>
+          </details>
+          <details>
+            <summary>Combined Docs or Slides</summary>
+            <p>Use combined Doc/Slide mode only when all selected templates are compatible. Do not mix Docs and Slides in one combined Doc/Slide run.</p>
+          </details>
+          <details>
+            <summary>Combined Sheets</summary>
+            <p>Use combined Sheet mode to copy selected Sheet templates into one spreadsheet. Sheet names are automatically sanitized and made unique.</p>
+          </details>
+          <details>
+            <summary>PDF output</summary>
+            <p>PDF conversion applies to generated Docs and Slides. Sheet templates remain Google Sheets unless separate PDF export support is added later.</p>
+          </details>
+        </section>
+
+        <section id="email-log">
+          <h2>Email and logs</h2>
+          <p>The <code>EMAIL</code> sheet stores the optional email subject and body templates. If the sidebar option to send email is enabled and a selected item has a recipient email, the app can email the generated file.</p>
+          <p>The <code>Log</code> sheet records timestamp, generator type, file name, file URL, folder URL, recipient, email status, generation status, and details.</p>
+        </section>
+
+        <section id="health">
+          <h2>Health check, cancel, and reset</h2>
+          <ul>
+            <li><strong>Run Health Check</strong> validates required sheets, active selection, placeholder setup, template IDs, folder IDs, and external request access.</li>
+            <li><strong>Cancel Current Generation</strong> stops the current queued generation state.</li>
+            <li><strong>Reset Generator State</strong> clears stored generation state and pending triggers. Use this if a test run gets stuck.</li>
+          </ul>
+        </section>
+
+        <section id="testing">
+          <h2>Testing checklist</h2>
+          <ul class="checklist">
+            <li>Confirm the Productivity Suite menu appears after reloading the Google Sheet.</li>
+            <li>Run Setup Complete Demo Workspace.</li>
+            <li>Confirm the demo Drive folder and sample templates are created.</li>
+            <li>Select <code>R-DOC-GEN</code> rows <code>3:5</code> and run Health Check.</li>
+            <li>Generate separate files from row mode.</li>
+            <li>Select <code>C-DOC-GEN</code> columns <code>B:D</code> and run Health Check.</li>
+            <li>Generate separate files from column mode.</li>
+            <li>Test invalid template IDs and folder IDs to confirm preflight validation stops the run.</li>
+            <li>Test PDF output with Doc or Slide templates.</li>
+            <li>Test email sending using your own email address first.</li>
+          </ul>
+        </section>
+
+        <section id="troubleshooting">
+          <h2>Troubleshooting</h2>
+          <details>
+            <summary>The menu does not appear</summary>
+            <p>Reload the Google Sheet. Confirm the Apps Script project is bound to the Sheet and that root files were pushed correctly.</p>
+          </details>
+          <details>
+            <summary>Health check says a template ID is invalid</summary>
+            <p>Check that the value is only the file ID, not the full URL. Also confirm your account has access to the template file.</p>
+          </details>
+          <details>
+            <summary>Health check says a folder ID is invalid</summary>
+            <p>Check that the destination folder exists and your account can write files into it.</p>
+          </details>
+          <details>
+            <summary>Combined output fails</summary>
+            <p>Use combined modes only with compatible template types. Do not combine Docs and Slides in one combined Doc/Slide run.</p>
+          </details>
+          <details>
+            <summary>Email fails but file generation succeeds</summary>
+            <p>Confirm the recipient email is valid and that the script has Mail scope authorization. Start by emailing your own address.</p>
+          </details>
+          <details>
+            <summary>Generation seems stuck</summary>
+            <p>Use <strong>Productivity Suite &gt; Reset Generator State</strong>, then run Health Check before starting again.</p>
+          </details>
+        </section>
+      </article>
     </section>
   </main>
+
   <script>
-    const fallback={workspaceName:'Generated Workspace',description:'Created with Google Workspace Generator.',documents:[{name:'Project Brief',body:'Purpose\n\nScope\n\nDeliverables'}],spreadsheets:[{name:'Tracker',sheets:[{name:'Tasks',values:[['Task','Owner','Status'],['Example','','Not started']]}]}],presentations:[{name:'Overview Deck',title:'Generated Workspace',subtitle:'Created with Google Workspace Generator'}]};
-    const $=id=>document.getElementById(id);
-    $('form').addEventListener('submit',submitForm);$('preview').addEventListener('click',()=>{setJson(buildConfig());$('advanced').checked=true;setStatus('success','JSON preview updated.')});$('reset').addEventListener('click',resetSample);init();
-    function init(){if(window.google&&google.script&&google.script.run)google.script.run.withSuccessHandler(c=>setJson(c||fallback)).withFailureHandler(()=>setJson(fallback)).getDefaultWorkspaceConfig();else{setJson(fallback);setStatus('info','Local preview mode. Deploy with Apps Script to generate files.')}}
-    function submitForm(e){e.preventDefault();$('results').innerHTML='';let config;try{config=$('advanced').checked?JSON.parse($('json').value):buildConfig()}catch(err){setStatus('error','Invalid JSON: '+err.message);return}const msg=validate(config);if(msg){setStatus('error',msg);return}setBusy(true);setStatus('info','Creating workspace...');google.script.run.withSuccessHandler(r=>{setBusy(false);setStatus('success','Workspace created.');render(r)}).withFailureHandler(err=>{setBusy(false);setStatus('error',err&&err.message?err.message:String(err))}).generateWorkspace(config)}
-    function buildConfig(){const name=$('workspaceName').value.trim();return{workspaceName:name,description:$('description').value.trim(),documents:Array.from({length:count('docs')},(_,i)=>({name:`${name||'Workspace'} Doc ${i+1}`,body:'Generated document.'})),spreadsheets:Array.from({length:count('sheets')},(_,i)=>({name:`${name||'Workspace'} Sheet ${i+1}`,sheets:[{name:'Tracker',values:[['Item','Owner','Status'],['','','']]}]})),presentations:Array.from({length:count('slides')},(_,i)=>({name:`${name||'Workspace'} Deck ${i+1}`,title:name||'Generated Workspace',subtitle:'Created with Google Workspace Generator'}))}}
-    function validate(c){if(!c||!String(c.workspaceName||'').trim())return'Workspace name is required.';const t=arr(c.documents).length+arr(c.spreadsheets).length+arr(c.presentations).length;if(t<1)return'Choose at least one file.';if(t>50)return'Maximum total files allowed: 50.';return''}
-    function count(id){const n=parseInt($(id).value,10);return Number.isFinite(n)?Math.max(0,Math.min(20,n)):0}function arr(v){return Array.isArray(v)?v:[]}function setJson(c){$('json').value=JSON.stringify(c,null,2)}function setBusy(v){$('generate').disabled=v;$('generate').textContent=v?'Generating...':'Generate workspace'}function setStatus(t,m){$('status').className='status '+t;$('status').textContent=m}function resetSample(){setJson(fallback);$('workspaceName').value=fallback.workspaceName;$('description').value=fallback.description;$('docs').value=1;$('sheets').value=1;$('slides').value=1;setStatus('success','Sample restored.')}
-    function render(r){const s=r.summary||{},res=r.resources||[],f=r.workspace||{};$('results').innerHTML=`<div class="resource"><strong>${esc(f.name||'Workspace')}</strong><br><a href="${attr(f.url)}" target="_blank">Open folder</a></div><div class="stats"><div class="stat">Files<br><strong>${s.totalFiles||res.length}</strong></div><div class="stat">Docs<br><strong>${s.documents||0}</strong></div><div class="stat">Sheets<br><strong>${s.spreadsheets||0}</strong></div><div class="stat">Slides<br><strong>${s.presentations||0}</strong></div></div>`+res.map(x=>`<div class="resource"><strong>${esc(x.name)}</strong><br><small>${esc(x.type)}</small><br><a href="${attr(x.url)}" target="_blank">Open file</a></div>`).join('')}
-    function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}function attr(v){return esc(v||'#')}
+    const fallback = {
+      workspaceName: 'Generated Workspace',
+      description: 'Created with Google Workspace Generator.',
+      documents: [{ name: 'Project Brief', body: 'Purpose\n\nScope\n\nDeliverables' }],
+      spreadsheets: [{ name: 'Tracker', sheets: [{ name: 'Tasks', values: [['Task', 'Owner', 'Status'], ['Example', '', 'Not started']] }] }],
+      presentations: [{ name: 'Overview Deck', title: 'Generated Workspace', subtitle: 'Created with Google Workspace Generator' }]
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    $('form').addEventListener('submit', submitForm);
+    $('preview').addEventListener('click', () => {
+      setJson(buildConfig());
+      $('advanced').checked = true;
+      setStatus('success', 'JSON preview updated.');
+    });
+    $('reset').addEventListener('click', resetSample);
+    init();
+
+    function init() {
+      if (window.google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((config) => setJson(config || fallback))
+          .withFailureHandler(() => setJson(fallback))
+          .getDefaultWorkspaceConfig();
+      } else {
+        setJson(fallback);
+        setStatus('info', 'Local preview mode. Deploy with Apps Script to generate files.');
+      }
+    }
+
+    function submitForm(event) {
+      event.preventDefault();
+      $('results').innerHTML = '';
+      let config;
+
+      try {
+        config = $('advanced').checked ? JSON.parse($('json').value) : buildConfig();
+      } catch (error) {
+        setStatus('error', 'Invalid JSON: ' + error.message);
+        return;
+      }
+
+      const validationMessage = validate(config);
+      if (validationMessage) {
+        setStatus('error', validationMessage);
+        return;
+      }
+
+      if (!(window.google && google.script && google.script.run)) {
+        setStatus('error', 'This page must be deployed as an Apps Script web app to generate files.');
+        return;
+      }
+
+      setBusy(true);
+      setStatus('info', 'Creating workspace...');
+      google.script.run
+        .withSuccessHandler((result) => {
+          setBusy(false);
+          setStatus('success', 'Workspace created.');
+          render(result);
+        })
+        .withFailureHandler((error) => {
+          setBusy(false);
+          setStatus('error', error && error.message ? error.message : String(error));
+        })
+        .generateWorkspace(config);
+    }
+
+    function buildConfig() {
+      const name = $('workspaceName').value.trim();
+      return {
+        workspaceName: name,
+        description: $('description').value.trim(),
+        documents: Array.from({ length: count('docs') }, (_, index) => ({
+          name: `${name || 'Workspace'} Doc ${index + 1}`,
+          body: 'Generated document.'
+        })),
+        spreadsheets: Array.from({ length: count('sheets') }, (_, index) => ({
+          name: `${name || 'Workspace'} Sheet ${index + 1}`,
+          sheets: [{ name: 'Tracker', values: [['Item', 'Owner', 'Status'], ['', '', '']] }]
+        })),
+        presentations: Array.from({ length: count('slides') }, (_, index) => ({
+          name: `${name || 'Workspace'} Deck ${index + 1}`,
+          title: name || 'Generated Workspace',
+          subtitle: 'Created with Google Workspace Generator'
+        }))
+      };
+    }
+
+    function validate(config) {
+      if (!config || !String(config.workspaceName || '').trim()) return 'Workspace name is required.';
+      const total = arr(config.documents).length + arr(config.spreadsheets).length + arr(config.presentations).length;
+      if (total < 1) return 'Choose at least one file.';
+      if (total > 50) return 'Maximum total files allowed: 50.';
+      return '';
+    }
+
+    function count(id) {
+      const value = parseInt($(id).value, 10);
+      return Number.isFinite(value) ? Math.max(0, Math.min(20, value)) : 0;
+    }
+
+    function arr(value) { return Array.isArray(value) ? value : []; }
+    function setJson(config) { $('json').value = JSON.stringify(config, null, 2); }
+    function setBusy(isBusy) { $('generate').disabled = isBusy; $('generate').textContent = isBusy ? 'Generating...' : 'Generate workspace'; }
+    function setStatus(type, message) { $('status').className = 'status ' + type; $('status').textContent = message; }
+    function resetSample() {
+      setJson(fallback);
+      $('workspaceName').value = fallback.workspaceName;
+      $('description').value = fallback.description;
+      $('docs').value = 1;
+      $('sheets').value = 1;
+      $('slides').value = 1;
+      setStatus('success', 'Sample restored.');
+    }
+
+    function render(result) {
+      const summary = result.summary || {};
+      const resources = result.resources || [];
+      const workspace = result.workspace || {};
+      $('results').innerHTML = `
+        <div class="resource">
+          <strong>${esc(workspace.name || 'Workspace')}</strong><br>
+          <a href="${attr(workspace.url)}" target="_blank">Open folder</a>
+        </div>
+        <div class="stats">
+          <div class="stat">Files<br><strong>${summary.totalFiles || resources.length}</strong></div>
+          <div class="stat">Docs<br><strong>${summary.documents || 0}</strong></div>
+          <div class="stat">Sheets<br><strong>${summary.spreadsheets || 0}</strong></div>
+          <div class="stat">Slides<br><strong>${summary.presentations || 0}</strong></div>
+        </div>
+      ` + resources.map((item) => `
+        <div class="resource">
+          <strong>${esc(item.name)}</strong><br>
+          <small>${esc(item.type)}</small><br>
+          <a href="${attr(item.url)}" target="_blank">Open file</a>
+        </div>
+      `).join('');
+    }
+
+    function esc(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function attr(value) { return esc(value || '#'); }
   </script>
 </body>
 </html>
