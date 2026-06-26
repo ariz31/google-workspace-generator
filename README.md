@@ -1,92 +1,108 @@
 # Google Workspace Generator
 
-A lightweight Google Apps Script web app for generating a structured Google Drive workspace with optional Google Docs, Sheets, and Slides resources.
+Google Workspace Generator is a Google Apps Script productivity suite for creating and batch-generating Google Workspace files.
 
-This repository is intentionally simple: it uses Apps Script directly, keeps the UI in one `Index.html` file, and can be deployed with [`clasp`](https://github.com/google/clasp) or copied into the Apps Script editor.
+It supports two workflows:
 
-## What it does
+1. **Spreadsheet-bound template generator** through `Sidebar.html`
+   - Select rows in `R-DOC-GEN` or columns in `C-DOC-GEN`.
+   - Generate Docs, Slides, Sheets, or PDFs from template IDs.
+   - Replace placeholders like `{{Name}}`, `{{Name}u}}`, `{{Name}b}}`, `{{Name}ub}}`, `{{Name}1}}`, and `{{Name}1b}}`.
+   - Process separate files or combined Docs, Slides, and Sheets.
+   - Send generated files by email when recipient data exists.
+   - Log activity to a `Log` sheet.
+   - Insert QR codes from the active cell.
 
-- Creates a dedicated Google Drive folder for a workspace.
-- Generates configurable Google Docs, Sheets, and Slides files inside that folder.
-- Provides a browser-based Apps Script UI for non-technical users.
-- Supports both a guided form and advanced JSON configuration.
-- Returns shareable links to all generated resources.
-- Includes validation and safe defaults to avoid accidental large file generation.
+2. **Standalone web app workspace generator** through `Index.html`
+   - Create a Drive folder.
+   - Generate basic Docs, Sheets, and Slides from a form or JSON configuration.
+   - Return links to the generated resources.
 
 ## Repository structure
 
 ```text
 .
-├── README.md
-├── package.json
-├── .clasp.json.example
-├── .editorconfig
-├── .gitignore
+├── Code.gs              # Main Apps Script backend
+├── Sidebar.html         # Spreadsheet-bound generator sidebar
+├── Index.html           # Standalone web app UI
+├── appsscript.json      # Apps Script manifest and scopes
+├── package.json         # clasp helper scripts
+├── .clasp.json.example  # clasp config template
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── DEVELOPMENT.md
-└── src/
-    ├── Code.gs
-    ├── Index.html
-    └── appsscript.json
+└── LICENSE
 ```
 
 ## Quick start with clasp
 
-1. Install dependencies:
+```bash
+npm install
+npm run clasp:login
+npx clasp create --type sheets --title "Google Workspace Generator" --rootDir .
+npm run push
+npm run open
+```
 
-   ```bash
-   npm install
-   ```
+For an existing Apps Script project, copy `.clasp.json.example` to `.clasp.json`, replace `YOUR_SCRIPT_ID_HERE`, then run:
 
-2. Log in to Google Apps Script:
+```bash
+npm run push
+```
 
-   ```bash
-   npm run clasp:login
-   ```
+## Spreadsheet generator setup
 
-3. Create a new Apps Script project:
+1. Push or copy the root files into a Google Apps Script project bound to a Google Sheet.
+2. Reload the spreadsheet.
+3. Open **Productivity Suite > Setup Generator Sheets**.
+4. Fill in the generated sheets:
+   - `R-DOC-GEN`: one output per selected row.
+   - `C-DOC-GEN`: one output per selected column.
+   - `EMAIL`: optional subject/body templates.
+5. Select the rows or columns to process.
+6. Open **Productivity Suite > Open Generator Sidebar**.
+7. Choose options and click **Generate**.
 
-   ```bash
-   npx clasp create --type webapp --title "Google Workspace Generator" --rootDir src
-   ```
+## Row mode format: `R-DOC-GEN`
 
-4. Push the source:
+| Column | Purpose |
+| --- | --- |
+| A | Template file ID |
+| B | Destination Drive folder ID |
+| C | Recipient email, optional |
+| D | Output name |
+| E+ | Placeholder values, with headers like `{{Name}}` |
 
-   ```bash
-   npm run push
-   ```
+## Column mode format: `C-DOC-GEN`
 
-5. Open the Apps Script project:
+| Row | Purpose |
+| --- | --- |
+| 1 | Template file ID per item column |
+| 2 | Destination Drive folder ID |
+| 3 | Recipient email, optional |
+| 4 | Output name |
+| 5+ | Placeholder values, with row labels like `{{Name}}` |
 
-   ```bash
-   npm run open
-   ```
+## Standalone web app setup
 
-6. Deploy as a web app from Apps Script:
-   - Click **Deploy > New deployment**.
-   - Select **Web app**.
-   - Execute as: **Me**.
-   - Who has access: choose the appropriate setting for your workspace.
+Deploy the same project as a web app:
 
-## Quick start without clasp
+1. Open Apps Script.
+2. Click **Deploy > New deployment**.
+3. Select **Web app**.
+4. Execute as **Me**.
+5. Choose the access level appropriate for your workspace.
 
-1. Go to [script.google.com](https://script.google.com/).
-2. Create a new Apps Script project.
-3. Copy `src/Code.gs` into `Code.gs`.
-4. Create an HTML file named `Index` and copy `src/Index.html` into it.
-5. Copy settings from `src/appsscript.json` into the Apps Script manifest.
-6. Deploy as a web app.
+`Index.html` calls `getDefaultWorkspaceConfig()` and `generateWorkspace(config)` from `Code.gs`.
 
-## Example advanced configuration
+## Example standalone JSON
 
 ```json
 {
   "workspaceName": "Physics 101 - Quarter 1",
   "description": "Generated class workspace",
   "documents": [
-    { "name": "Syllabus", "body": "Course overview and expectations." },
-    { "name": "Lesson Plan Template", "body": "Objectives\nMaterials\nActivities\nAssessment" }
+    { "name": "Syllabus", "body": "Course overview and expectations." }
   ],
   "spreadsheets": [
     {
@@ -102,26 +118,12 @@ This repository is intentionally simple: it uses Apps Script directly, keeps the
 }
 ```
 
-## Safety limits
+## Notes
 
-The app includes conservative defaults:
-
-- Maximum generated Docs: 20
-- Maximum generated Sheets: 20
-- Maximum generated Slides files: 20
-- Maximum total generated files: 50
-- Maximum file name length: 120 characters
-
-These limits can be adjusted in `src/Code.gs` if needed.
-
-## Recommended next improvements
-
-- Add template duplication support for existing Docs, Sheets, and Slides.
-- Add Google Drive sharing rules per generated workspace.
-- Add audit logging to a central spreadsheet.
-- Add unit tests with `gas-local` or a small pure JavaScript validation module.
-- Add a CI workflow for linting and formatting.
+- `appsscript.json` includes Drive, Docs, Sheets, Slides, Mail, external request, UI, and trigger scopes because the full spreadsheet generator uses all of them.
+- The web app manifest currently uses `ANYONE` access. Change it before deployment if you need domain-only or private access.
+- Keep `Code.gs`, `Sidebar.html`, `Index.html`, and `appsscript.json` at the repository root. The root is now the canonical clasp source.
 
 ## License
 
-MIT. Update this section if you plan to use a different license.
+MIT.
