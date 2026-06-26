@@ -381,7 +381,14 @@
       event.preventDefault();
       clearResults();
 
-      const config = getSelectedConfig();
+      let config;
+      try {
+        config = getSelectedConfig();
+      } catch (error) {
+        setStatus('error', error.message);
+        return;
+      }
+
       const localError = validateClientConfig(config);
 
       if (localError) {
