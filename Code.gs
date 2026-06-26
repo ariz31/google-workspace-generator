@@ -1,429 +1,924 @@
 /**
- * @OnlyCurrentDoc
+ * Google Workspace Generator / Productivity Suite
  *
- * This script combines a QR Code generator and a unified Document, Slide, and Sheet generator
- * into a single productivity suite.
+ * Root Apps Script backend for:
+ * - QR code insertion from the active spreadsheet cell.
+ * - Spreadsheet-bound template generation from R-DOC-GEN and C-DOC-GEN sheets.
+ * - Async batched generation for Docs, Slides, Sheets, PDF conversion, email, logging, and combined output.
+ * - Standalone web-app workspace generation through Index.html.
  *
- * SCRIPT AUTHORIZATION SCOPES:
- * @AuthScope https://www.googleapis.com/auth/spreadsheets
- * @AuthScope https://www.googleapis.com/auth/drive
- * @AuthScope https://www.googleapis.com/auth/script.container.ui
- * @AuthScope https://www.googleapis.com/auth/userinfo.email
- * @AuthScope https://www.googleapis.com/auth/script.send_mail
- * @AuthScope https://www.googleapis.com/auth/documents
- * @AuthScope https://www.googleapis.com/auth/presentations
- * @AuthScope https://www.googleapis.com/auth/script.external_request
- * @AuthScope https://www.googleapis.com/auth/script.scriptapp
+ * Required scopes are declared in appsscript.json.
  */
+
+const APP_NAME = 'Google Workspace Generator';
+const STATE_KEY = 'generationState';
+const TRIGGER_HANDLER = 'continueGeneration';
+const ROW_MODE_SHEET = 'R-DOC-GEN';
+const COLUMN_MODE_SHEET = 'C-DOC-GEN';
+const EMAIL_SHEET = 'EMAIL';
+const LOG_SHEET = 'Log';
+
+const APP_MIME = Object.freeze({
+  GOOGLE_DOCS: 'application/vnd.google-apps.document',
+  GOOGLE_SLIDES: 'application/vnd.google-apps.presentation',
+  GOOGLE_SHEETS: 'application/vnd.google-apps.spreadsheet',
+});
+
+const GENERATOR_LIMITS = Object.freeze({
+  minBatchSize: 1,
+  maxBatchSize: 50,
+  triggerDelayMs: 60 * 1000,
+  batchTimeLimitMs: 270 * 1000,
+  maxSimpleDocs: 20,
+  maxSimpleSheets: 20,
+  maxSimpleSlides: 20,
+  maxSimpleFiles: 50,
+  maxNameLength: 120,
+  maxDescriptionLength: 500,
+  maxDocumentBodyLength: 20000,
+  maxSimpleSheetRows: 500,
+  maxSimpleSheetColumns: 50,
+});
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Productivity Suite')
-    .addItem('Create QR Code', 'insertQRCode')
+    .addItem('Open Generator Sidebar', 'showSidebar')
+    .addItem('Create QR Code from Active Cell', 'insertQRCode')
     .addSeparator()
-    .addItem('Open Generator', 'showSidebar')
+    .addItem('Setup Generator Sheets', 'setupGeneratorSheets')
+    .addItem('Cancel Current Generation', 'cancelGeneration')
     .addToUi();
 }
 
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle(APP_NAME)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
 function showSidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('Sidebar').setTitle('Generator Suite').setWidth(350);
+  const html = HtmlService.createHtmlOutputFromFile('Sidebar')
+    .setTitle('Generator Suite')
+    .setWidth(420);
   SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function setupGeneratorSheets() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error('Open this from a Google Sheet to set up generator sheets.');
+
+  const rowSheet = _getOrCreateSheet(ss, ROW_MODE_SHEET);
+  rowSheet.clear();
+  rowSheet.getRange(1, 1, 1, 5).setValues([['Template ID', 'Folder ID', 'Recipient Email', 'Output Name', '{{Sample}}']]);
+  rowSheet.getRange(2, 1, 1, 5).setValues([['Paste a Docs/Slides/Sheets template file ID below', 'Paste target Drive folder ID below', 'optional@email.com', 'Generated file name', 'Replacement value']]);
+  rowSheet.getRange(3, 1, 1, 5).setValues([['', '', '', 'Example Output', 'Hello world']]);
+  rowSheet.setFrozenRows(2);
+  rowSheet.autoResizeColumns(1, 5);
+
+  const columnSheet = _getOrCreateSheet(ss, COLUMN_MODE_SHEET);
+  columnSheet.clear();
+  columnSheet.getRange(1, 1, 5, 3).setValues([
+    ['Field', 'Item 1', 'Item 2'],
+    ['Template ID', '', ''],
+    ['Folder ID', '', ''],
+    ['Recipient Email', '', ''],
+    ['Output Name', 'Example Output 1', 'Example Output 2'],
+  ]);
+  columnSheet.getRange(6, 1, 1, 3).setValues([['{{Sample}}', 'Hello item 1', 'Hello item 2']]);
+  columnSheet.setFrozenRows(1);
+  columnSheet.setFrozenColumns(1);
+  columnSheet.autoResizeColumns(1, 3);
+
+  const emailSheet = _getOrCreateSheet(ss, EMAIL_SHEET);
+  emailSheet.clear();
+  emailSheet.getRange(1, 1, 3, 2).setValues([
+    ['Email Template Field', 'Value'],
+    ['Subject', 'Your generated file: {{Sample}}'],
+    ['Body', '<p>Hello,</p><p>Your generated file is attached.</p>'],
+  ]);
+  emailSheet.autoResizeColumns(1, 2);
+
+  _getLogSheet();
+  SpreadsheetApp.getUi().alert('Generator sheets created. Fill in template IDs, folder IDs, replacement values, then select rows or columns and open the sidebar.');
 }
 
 function insertQRCode() {
   const sheet = SpreadsheetApp.getActiveSheet();
   const cell = sheet.getActiveCell();
-  // Fixed to getDisplayValue so numeric formats aren't stripped before QR generation
   const data = cell.getDisplayValue().trim();
+
   if (!data) {
     SpreadsheetApp.getUi().alert('The selected cell is empty.');
     return;
   }
+
   const size = 300;
-  const googleUrl = `https://chart.googleapis.com/chart?cht=qr&chs=${size}x${size}&chl=${encodeURIComponent(data)}`;
-  try {
-    let response = UrlFetchApp.fetch(googleUrl, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200) {
-      const qrserverUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`;
-      response = UrlFetchApp.fetch(qrserverUrl);
+  const urls = [
+    `https://quickchart.io/qr?size=${size}&text=${encodeURIComponent(data)}`,
+    `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(data)}`,
+  ];
+
+  let lastError = '';
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const response = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true });
+      if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
+        const blob = response.getBlob().setName('qrcode.png');
+        sheet.insertImage(blob, cell.getColumn(), cell.getRow());
+        return;
+      }
+      lastError = `HTTP ${response.getResponseCode()}`;
+    } catch (error) {
+      lastError = error.message;
     }
-    const blob = response.getBlob().setName('qrcode.png');
-    sheet.insertImage(blob, cell.getColumn(), cell.getRow());
-  } catch (e) {
-    SpreadsheetApp.getUi().alert(`Failed to generate QR code: ${e.message}`);
+  }
+
+  SpreadsheetApp.getUi().alert(`Failed to generate QR code: ${lastError}`);
+}
+
+function runGenerator(rawOptions, sheetName) {
+  const lock = LockService.getUserLock();
+  lock.waitLock(30000);
+
+  try {
+    _deleteTrigger();
+    PropertiesService.getUserProperties().deleteProperty(STATE_KEY);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('This generator must run from a bound Google Sheet.');
+
+    const targetSheetName = sheetName || ss.getActiveSheet().getName();
+    const sheet = ss.getSheetByName(targetSheetName);
+    if (!sheet) throw new Error(`Sheet "${targetSheetName}" not found.`);
+    if (targetSheetName !== ROW_MODE_SHEET && targetSheetName !== COLUMN_MODE_SHEET) {
+      throw new Error(`Use ${ROW_MODE_SHEET} or ${COLUMN_MODE_SHEET}, then select the rows or columns to process.`);
+    }
+
+    const options = _normalizeRunOptions(rawOptions || {});
+    const selectedItems = targetSheetName === ROW_MODE_SHEET
+      ? Array.from(_getSelectedRows(ss, targetSheetName)).sort((a, b) => a - b)
+      : Array.from(_getSelectedColumns(ss, targetSheetName)).sort((a, b) => a - b);
+
+    if (selectedItems.length === 0) {
+      throw new Error(`No valid selection found in ${targetSheetName}. Select data rows in ${ROW_MODE_SHEET} or data columns in ${COLUMN_MODE_SHEET}.`);
+    }
+
+    const sheetData = sheet.getDataRange().getDisplayValues();
+    const placeholderMap = targetSheetName === ROW_MODE_SHEET
+      ? _buildPlaceholderMap(sheetData[0] || [], 4)
+      : _buildColumnPlaceholderMap(sheetData, 4);
+
+    if (Object.keys(placeholderMap).length === 0) {
+      throw new Error('No placeholders found. Use headers like {{Name}} starting at column E for R-DOC-GEN or row 5 for C-DOC-GEN.');
+    }
+
+    const emailTemplates = _getEmailTemplates(options.sendEmail);
+    const relevantData = targetSheetName === ROW_MODE_SHEET
+      ? selectedItems.map((rowNum) => sheetData[rowNum - 1] || [])
+      : selectedItems.map((colNum) => sheetData.map((row) => row[colNum - 1] || ''));
+
+    const itemTypes = _getItemTypes(selectedItems, sheet, sheetData);
+    const baseState = {
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      items: selectedItems,
+      currentIndex: 0,
+      totalItems: selectedItems.length,
+      options,
+      sheetName: targetSheetName,
+      results: [],
+      folders: [],
+      placeholderMap,
+      emailTemplates,
+      relevantData,
+      itemTypes,
+      isCombinedRun: false,
+    };
+
+    _configureCombinedRunIfNeeded(baseState, itemTypes, sheetData);
+    PropertiesService.getUserProperties().setProperty(STATE_KEY, JSON.stringify(baseState));
+
+    continueGeneration();
+    const state = getGenerationStatus();
+    return { status: 'started', totalItems: state.totalItems, currentIndex: state.currentIndex, state };
+  } finally {
+    lock.releaseLock();
   }
 }
 
-//==================================================================================================
-// REGION: ASYNCHRONOUS GENERATOR ENGINE
-//==================================================================================================
+function continueGeneration() {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(30000)) return;
 
-const MimeType = {
-    GOOGLE_DOCS: 'application/vnd.google-apps.document',
-    GOOGLE_SLIDES: 'application/vnd.google-apps.presentation',
-    GOOGLE_SHEETS: 'application/vnd.google-apps.spreadsheet',
-    PDF: 'application/pdf'
-};
+  try {
+    const userProperties = PropertiesService.getUserProperties();
+    const stateProperty = userProperties.getProperty(STATE_KEY);
+    if (!stateProperty) return;
 
-function runGenerator(options, sheetName) {
-  _deleteTrigger();
-  PropertiesService.getUserProperties().deleteAllProperties();
+    const state = JSON.parse(stateProperty);
+    if (state.status !== 'running') return;
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error(`Sheet "${sheetName}" not found.`);
+    const started = Date.now();
+    let processed = 0;
+    const batchSize = _clampNumber(state.options.batchSize, GENERATOR_LIMITS.minBatchSize, GENERATOR_LIMITS.maxBatchSize);
+    const usedSheetNames = state.isCombinedRun ? new Set(state.usedSheetNames || []) : null;
 
-  const allSelectedItems = (sheetName === 'R-DOC-GEN') 
-    ? Array.from(_getSelectedRows(ss, sheetName)).sort((a,b) => a - b)
-    : Array.from(_getSelectedColumns(ss, sheetName)).sort((a,b) => a - b);
+    while (state.currentIndex < state.totalItems) {
+      if (Date.now() - started > GENERATOR_LIMITS.batchTimeLimitMs) break;
+      if (processed >= batchSize) break;
 
-  if (allSelectedItems.length === 0) {
-    throw new Error(`No items selected in '${sheetName}'. Please highlight rows/columns to process.`);
-  }
-  
-  // CRITICAL FIX: getDisplayValues() pulls numbers/dates exactly as formatted, bypassing numeric crashes
-  const sheetData = sheet.getDataRange().getDisplayValues();
-  const placeholderMap = (sheetName === 'R-DOC-GEN') 
-      ? _buildPlaceholderMap(sheetData[0], 4) 
-      : _buildColumnPlaceholderMap(sheetData, 4);
-      
-  const emailSheet = ss.getSheetByName('EMAIL');
-  const emailTemplates = {
-      subject: options.sendEmail && emailSheet ? emailSheet.getRange('A2').getValue() : '',
-      body: options.sendEmail && emailSheet ? emailSheet.getRange('A3').getValue() : ''
-  };
+      const itemNum = state.items[state.currentIndex];
+      const itemData = state.relevantData[state.currentIndex];
 
-  const relevantData = (sheetName === 'R-DOC-GEN')
-    ? allSelectedItems.map(rowNum => sheetData[rowNum - 1])
-    : allSelectedItems.map(colNum => sheetData.map(row => row[colNum - 1]));
-
-  const baseState = {
-    items: allSelectedItems,
-    currentIndex: 0,
-    totalItems: allSelectedItems.length,
-    options: options,
-    sheetName: sheetName,
-    results: [],
-    folders: [],
-    status: 'running',
-    placeholderMap: placeholderMap,
-    emailTemplates: emailTemplates,
-    relevantData: relevantData
-  };
-  
-  const itemTypes = _getItemTypes(allSelectedItems, sheet, sheetData);
-  let isCombinedRun = false;
-
-  if (options.sheetOutputMode === 'combined' && itemTypes.sheets.length > 0) {
-      _initializeCombinedRun('sheets', itemTypes, baseState, sheetData);
-      isCombinedRun = true;
-  } else if (options.docSlideOutputMode === 'combined' && (itemTypes.docs.length > 0 || itemTypes.slides.length > 0)) {
-      if (itemTypes.docs.length > 0 && itemTypes.slides.length > 0) {
-          throw new Error("Cannot combine Docs and Slides. Please select only one type for combined mode.");
+      if (state.isCombinedRun) {
+        _processCombinedItem(state, itemNum, itemData, usedSheetNames);
+      } else {
+        _processSeparateItem(state, itemNum, itemData);
       }
-      const combineType = itemTypes.docs.length > 0 ? 'docs' : 'slides';
-      _initializeCombinedRun(combineType, itemTypes, baseState, sheetData);
-      isCombinedRun = true;
-  }
 
-  if (!isCombinedRun) {
-      PropertiesService.getUserProperties().setProperty('generationState', JSON.stringify(baseState));
+      state.currentIndex += 1;
+      processed += 1;
+    }
+
+    if (state.currentIndex < state.totalItems) {
+      if (state.isCombinedRun) state.usedSheetNames = Array.from(usedSheetNames);
+      state.updatedAt = new Date().toISOString();
+      userProperties.setProperty(STATE_KEY, JSON.stringify(state));
+      _createTrigger();
+    } else {
+      if (state.isCombinedRun) state.usedSheetNames = Array.from(usedSheetNames);
+      _finalizeCombinedRun(state);
+      state.status = 'complete';
+      state.completedAt = new Date().toISOString();
+      _deleteTrigger();
+      userProperties.setProperty(STATE_KEY, JSON.stringify(state));
+    }
+  } catch (error) {
+    _deleteTrigger();
+    const failedState = getGenerationStatus();
+    failedState.status = 'error';
+    failedState.error = error.message;
+    failedState.updatedAt = new Date().toISOString();
+    PropertiesService.getUserProperties().setProperty(STATE_KEY, JSON.stringify(failedState));
+    _logActivity({ generator: 'System', status: 'Error', details: error.message });
+  } finally {
+    lock.releaseLock();
   }
-  
-  continueGeneration();
-  const finalState = JSON.parse(PropertiesService.getUserProperties().getProperty('generationState'));
-  return { status: 'started', totalItems: finalState.totalItems };
 }
 
 function getGenerationStatus() {
-  const stateProperty = PropertiesService.getUserProperties().getProperty('generationState');
-  return stateProperty ? JSON.parse(stateProperty) : { status: 'idle' };
+  const stateProperty = PropertiesService.getUserProperties().getProperty(STATE_KEY);
+  if (!stateProperty) return { status: 'idle', currentIndex: 0, totalItems: 0, results: [], folders: [] };
+
+  const state = JSON.parse(stateProperty);
+  state.progress = state.totalItems ? Math.round((state.currentIndex / state.totalItems) * 100) : 0;
+  return state;
 }
 
 function cancelGeneration() {
   _deleteTrigger();
-  PropertiesService.getUserProperties().deleteAllProperties();
-  return { status: 'cancelled' };
+  PropertiesService.getUserProperties().deleteProperty(STATE_KEY);
+  return { status: 'cancelled', currentIndex: 0, totalItems: 0, results: [], folders: [] };
 }
-
-function continueGeneration() {
-  const userProperties = PropertiesService.getUserProperties();
-  const stateProperty = userProperties.getProperty('generationState');
-  if (!stateProperty) return;
-
-  let state = JSON.parse(stateProperty);
-  const BATCH_START_TIME = new Date().getTime();
-  const TIME_LIMIT_MS = 280000; 
-  const batchSize = state.options.batchSize || 5;
-  let itemsProcessedThisRun = 0;
-  
-  const usedSheetNames = state.isCombinedRun ? new Set(state.usedSheetNames) : null;
-
-  while (state.currentIndex < state.totalItems) {
-    if (new Date().getTime() - BATCH_START_TIME > TIME_LIMIT_MS) break; 
-    if (itemsProcessedThisRun >= batchSize) break;
-
-    const itemNum = state.items[state.currentIndex];
-    const itemData = state.relevantData[state.currentIndex];
-
-    if (state.isCombinedRun) {
-      _processCombinedItem(state, itemNum, itemData, usedSheetNames);
-    } else {
-      _processSeparateItem(state, itemNum, itemData);
-    }
-
-    state.currentIndex++;
-    itemsProcessedThisRun++;
-  }
-
-  if (state.currentIndex < state.totalItems) {
-    if (state.isCombinedRun) {
-        state.usedSheetNames = Array.from(usedSheetNames);
-    }
-    userProperties.setProperty('generationState', JSON.stringify(state));
-    _createTrigger();
-  } else {
-    _deleteTrigger();
-    state.status = 'complete';
-    if (state.isCombinedRun) {
-        state.usedSheetNames = Array.from(usedSheetNames);
-    }
-    _finalizeCombinedRun(state);
-    userProperties.setProperty('generationState', JSON.stringify(state));
-  }
-}
-
-function _createTrigger() {
-  _deleteTrigger();
-  ScriptApp.newTrigger('continueGeneration')
-      .timeBased()
-      .after(1000) 
-      .create();
-}
-
-function _deleteTrigger() {
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'continueGeneration') {
-      ScriptApp.deleteTrigger(trigger);
-    }
-  });
-}
-
-//==================================================================================================
-// REGION: HELPER FUNCTIONS
-//==================================================================================================
 
 function getSelectionDetails() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { sheetName: '', mimeTypes: [], selectedIndices: [], message: 'No active spreadsheet found.' };
+
   const activeSheet = ss.getActiveSheet();
   const sheetName = activeSheet.getName();
 
-  if (sheetName !== 'R-DOC-GEN' && sheetName !== 'C-DOC-GEN') {
-    return { sheetName: sheetName, mimeTypes: [], selectedIndices: [] };
-  }
-  
-  const uniqueMimeTypes = new Set();
-  const selectedIndices = new Set(); 
-  const rangeList = ss.getActiveRangeList();
-  if (!rangeList) return { sheetName, mimeTypes: [], selectedIndices: [] };
-  
-  const ranges = rangeList.getRanges().filter(r => r.getSheet().getName() === sheetName);
-  if (ranges.length === 0) return { sheetName, mimeTypes: [], selectedIndices: [] };
-
-  try {
-    if (sheetName === 'R-DOC-GEN') {
-      ranges.forEach(range => {
-        for (let i = 0; i < range.getNumRows(); i++) {
-          const row = range.getRow() + i;
-          if (row < 3) continue; 
-          selectedIndices.add(row);
-          const templateId = activeSheet.getRange(row, 1).getValue();
-          if (templateId) {
-            uniqueMimeTypes.add(DriveApp.getFileById(templateId.toString().trim()).getMimeType());
-          }
-        }
-      });
-    } else { 
-       ranges.forEach(range => {
-        for (let i = 0; i < range.getNumColumns(); i++) {
-          const col = range.getColumn() + i;
-          if (col < 2) continue; 
-          selectedIndices.add(col);
-          const templateId = activeSheet.getRange(1, col).getValue();
-           if (templateId) {
-            uniqueMimeTypes.add(DriveApp.getFileById(templateId.toString().trim()).getMimeType());
-          }
-        }
-      });
-    }
-    return { 
-      sheetName: sheetName, 
-      mimeTypes: Array.from(uniqueMimeTypes),
-      selectedIndices: Array.from(selectedIndices).sort((a, b) => a - b) 
+  if (sheetName !== ROW_MODE_SHEET && sheetName !== COLUMN_MODE_SHEET) {
+    return {
+      sheetName,
+      mimeTypes: [],
+      selectedIndices: [],
+      message: `Switch to ${ROW_MODE_SHEET} or ${COLUMN_MODE_SHEET}.`,
     };
-  } catch (e) {
-    return { sheetName: sheetName, mimeTypes: [], selectedIndices: [] };
+  }
+
+  const selectedIndices = sheetName === ROW_MODE_SHEET
+    ? Array.from(_getSelectedRows(ss, sheetName)).sort((a, b) => a - b)
+    : Array.from(_getSelectedColumns(ss, sheetName)).sort((a, b) => a - b);
+
+  const data = activeSheet.getDataRange().getDisplayValues();
+  const mimeTypes = new Set();
+  const invalidItems = [];
+
+  selectedIndices.forEach((itemNum) => {
+    const templateId = sheetName === ROW_MODE_SHEET
+      ? _safeTrim(data[itemNum - 1] && data[itemNum - 1][0])
+      : _safeTrim(data[0] && data[0][itemNum - 1]);
+
+    if (!templateId) {
+      invalidItems.push(itemNum);
+      return;
+    }
+
+    try {
+      mimeTypes.add(DriveApp.getFileById(templateId).getMimeType());
+    } catch (error) {
+      invalidItems.push(itemNum);
+    }
+  });
+
+  return {
+    sheetName,
+    mimeTypes: Array.from(mimeTypes),
+    selectedIndices,
+    invalidItems,
+    message: selectedIndices.length ? '' : 'Select one or more valid rows or columns to process.',
+  };
+}
+
+function _normalizeRunOptions(options) {
+  return {
+    format: options.format === 'PDF' ? 'PDF' : 'DOC',
+    sendEmail: Boolean(options.sendEmail),
+    batchSize: _clampNumber(options.batchSize || 5, GENERATOR_LIMITS.minBatchSize, GENERATOR_LIMITS.maxBatchSize),
+    sheetTarget: _safeTrim(options.sheetTarget),
+    newSheetName: _sanitizeSheetName(_safeTrim(options.newSheetName)),
+    sheetOutputMode: options.sheetOutputMode === 'combined' ? 'combined' : 'separate',
+    docSlideOutputMode: options.docSlideOutputMode === 'combined' ? 'combined' : 'separate',
+    combinedSheetName: _sanitizeFileName(options.combinedSheetName || 'Combined Spreadsheet'),
+    combinedDocSlideName: _sanitizeFileName(options.combinedDocSlideName || 'Combined Output'),
+  };
+}
+
+function _configureCombinedRunIfNeeded(state, itemTypes, sheetData) {
+  const hasSheets = itemTypes.sheets.length > 0;
+  const hasDocs = itemTypes.docs.length > 0;
+  const hasSlides = itemTypes.slides.length > 0;
+
+  if (state.options.sheetOutputMode === 'combined' && hasSheets) {
+    _initializeCombinedRun('sheets', itemTypes.sheets, state, sheetData);
+    return;
+  }
+
+  if (state.options.docSlideOutputMode === 'combined' && (hasDocs || hasSlides)) {
+    if (hasDocs && hasSlides) {
+      throw new Error('Cannot combine Docs and Slides in one master file. Select only Docs or only Slides for combined mode.');
+    }
+    _initializeCombinedRun(hasDocs ? 'docs' : 'slides', hasDocs ? itemTypes.docs : itemTypes.slides, state, sheetData);
   }
 }
 
-function _processSingleItem(itemIdentifier, templateId, data, placeholderMap, options, subjectTemplate, bodyTemplate) {
-  const { format, sheetTarget, newSheetName, sendEmail } = options;
-  
-  const folderId = (data[1] || '').trim();
-  const recipientEmail = (data[2] || '').trim();
-  const fileNameValue = (data[3] && data[3].trim() !== '' ? data[3] : itemIdentifier).trim();
+function _initializeCombinedRun(type, itemsToCombine, state, sheetData) {
+  if (!itemsToCombine.length) return;
 
-  let logData = { fileName: fileNameValue, recipient: recipientEmail || 'N/A' };
+  const firstItemNum = itemsToCombine[0];
+  const firstData = state.sheetName === ROW_MODE_SHEET
+    ? sheetData[firstItemNum - 1]
+    : sheetData.map((row) => row[firstItemNum - 1]);
 
-  if (!templateId || !folderId) {
-    const errorMsg = !templateId ? 'Missing Template ID' : 'Missing Folder ID';
-    _logActivity({ ...logData, generator: 'N/A', status: 'Error', details: errorMsg });
-    return { result: { item: itemIdentifier, status: `❌ ${errorMsg}` }, folderId: null };
+  const firstTemplateId = _safeTrim(firstData && firstData[0]);
+  const folderId = _safeTrim(firstData && firstData[1]);
+  if (!firstTemplateId) throw new Error('The first selected item for combining is missing a Template ID.');
+  if (!folderId) throw new Error('The first selected item for combining is missing a Folder ID.');
+
+  const destinationFolder = DriveApp.getFolderById(folderId);
+  let combinedFile;
+
+  if (type === 'sheets') {
+    const spreadsheet = SpreadsheetApp.create(state.options.combinedSheetName || 'Combined Spreadsheet');
+    combinedFile = DriveApp.getFileById(spreadsheet.getId());
+    combinedFile.moveTo(destinationFolder);
+  } else {
+    const templateFile = DriveApp.getFileById(firstTemplateId);
+    combinedFile = templateFile.makeCopy(state.options.combinedDocSlideName || 'Combined Output', destinationFolder);
+    if (type === 'docs') _prepareCombinedDocument(combinedFile.getId());
+    if (type === 'slides') _prepareCombinedPresentation(combinedFile.getId());
+  }
+
+  const itemSet = new Set(itemsToCombine);
+  state.items = itemsToCombine;
+  state.totalItems = itemsToCombine.length;
+  state.relevantData = state.sheetName === ROW_MODE_SHEET
+    ? state.items.map((rowNum) => sheetData[rowNum - 1] || [])
+    : state.items.map((colNum) => sheetData.map((row) => row[colNum - 1] || ''));
+  state.folders = [{ id: folderId, url: destinationFolder.getUrl() }];
+  state.isCombinedRun = true;
+  state.combinedRunType = type;
+  state.combinedFileId = combinedFile.getId();
+  state.usedSheetNames = [];
+  state.skippedItems = state.items.filter((item) => !itemSet.has(item));
+}
+
+function _processSeparateItem(state, itemNum, itemData) {
+  const itemLabel = state.sheetName === ROW_MODE_SHEET ? `Row ${itemNum}` : `Column ${_columnNumberToLetter(itemNum)}`;
+  const templateId = _safeTrim(itemData && itemData[0]);
+
+  if (!templateId) {
+    state.results.push({ item: itemLabel, status: '❌ Missing Template ID' });
+    return;
+  }
+
+  const result = _processSingleItem(itemLabel, templateId, itemData, state.placeholderMap, state.options, state.emailTemplates.subject, state.emailTemplates.body);
+  state.results.push(result.result);
+
+  if (result.folderId) {
+    const exists = state.folders.some((folder) => folder.id === result.folderId);
+    if (!exists) state.folders.push({ id: result.folderId, url: `https://drive.google.com/drive/folders/${result.folderId}` });
+  }
+}
+
+function _processSingleItem(itemLabel, templateId, data, placeholderMap, options, subjectTemplate, bodyTemplate) {
+  const folderId = _safeTrim(data && data[1]);
+  const recipientEmail = _safeTrim(data && data[2]);
+  const outputName = _sanitizeFileName(data && data[3] ? data[3] : itemLabel);
+  const logData = { fileName: outputName, recipient: recipientEmail || 'N/A' };
+
+  if (!folderId) {
+    _logActivity({ ...logData, generator: 'Template', status: 'Error', details: 'Missing Folder ID' });
+    return { result: { item: itemLabel, status: '❌ Missing Folder ID' }, folderId: null };
   }
 
   try {
     const templateFile = DriveApp.getFileById(templateId);
     const mimeType = templateFile.getMimeType();
     const destinationFolder = DriveApp.getFolderById(folderId);
-    logData.folderUrl = destinationFolder.getUrl();
-    
-    const newFileName = `${templateFile.getName()} - ${fileNameValue}`;
-    logData.fileName = newFileName;
+    const newFileName = `${templateFile.getName()} - ${outputName}`;
     const newFile = templateFile.makeCopy(newFileName, destinationFolder);
-    
     let finalFile = newFile;
-    let status;
+    let status = '✅ Success';
+    let generator = 'Template';
 
-    if (mimeType === MimeType.GOOGLE_DOCS || mimeType === MimeType.GOOGLE_SLIDES) {
-      logData.generator = 'Doc/Slide';
-      const result = _generateDocOrSlide(newFile, mimeType, placeholderMap, data, format, folderId);
-      finalFile = result.file;
-      status = result.status;
-    } else if (mimeType === MimeType.GOOGLE_SHEETS) {
-      logData.generator = 'Sheet';
-      const newSpreadsheet = SpreadsheetApp.openById(newFile.getId());
-      _generateSheet(newSpreadsheet, templateId, placeholderMap, data, sheetTarget, newSheetName);
-      status = '✅ Success';
+    if (mimeType === APP_MIME.GOOGLE_DOCS || mimeType === APP_MIME.GOOGLE_SLIDES) {
+      generator = mimeType === APP_MIME.GOOGLE_DOCS ? 'Doc' : 'Slide';
+      _generateDocOrSlide(newFile, mimeType, placeholderMap, data);
+      if (options.format === 'PDF') {
+        finalFile = _convertFileToPdf(newFile, destinationFolder);
+        newFile.setTrashed(true);
+        status = '✅ Success (PDF)';
+      } else {
+        status = '✅ Success (Original format)';
+      }
+    } else if (mimeType === APP_MIME.GOOGLE_SHEETS) {
+      generator = 'Sheet';
+      _generateSheet(SpreadsheetApp.openById(newFile.getId()), templateId, placeholderMap, data, options.sheetTarget, options.newSheetName, false, null);
+      status = '✅ Success (Sheet)';
     } else {
-      throw new Error(`Unsupported template type.`);
+      throw new Error(`Unsupported template type: ${mimeType}`);
     }
-    
-    logData.fileUrl = finalFile.getUrl();
-    logData.emailStatus = 'Not Applicable';
 
-    if (recipientEmail && sendEmail) {
+    let emailStatus = 'Not sent';
+    if (recipientEmail && options.sendEmail) {
       const emailResult = _sendEmailNotification(finalFile, recipientEmail, subjectTemplate, bodyTemplate, data, placeholderMap);
       status = emailResult.status;
-      logData.emailStatus = emailResult.logStatus;
+      emailStatus = emailResult.logStatus;
     }
-    
-    _logActivity({ ...logData, status: 'Success', details: status.substring(2) });
-    return { result: { item: itemIdentifier, status, url: finalFile.getUrl() }, folderId: folderId };
 
-  } catch (e) {
-    _logActivity({ ...logData, generator: 'N/A', status: 'Error', details: e.message });
-    return { result: { item: itemIdentifier, status: `❌ ${e.message}` }, folderId: folderId };
-  }
-}
-
-function _generateDocOrSlide(newFile, mimeType, placeholderMap, row, format, folderId) {
-  const copyId = newFile.getId();
-  if (mimeType === MimeType.GOOGLE_DOCS) {
-    const doc = DocumentApp.openById(copyId);
-    [doc.getHeader(), doc.getBody(), doc.getFooter()].forEach(sec => {
-      _replacePlaceholdersInSection(sec, placeholderMap, row);
+    _logActivity({
+      generator,
+      fileName: finalFile.getName(),
+      fileUrl: finalFile.getUrl(),
+      folderUrl: destinationFolder.getUrl(),
+      recipient: recipientEmail || 'N/A',
+      emailStatus,
+      status: status.startsWith('❌') ? 'Error' : 'Success',
+      details: status.replace(/^[✅⚠️❌]\s*/, ''),
     });
-    doc.saveAndClose();
-  } else { 
-    const pres = SlidesApp.openById(copyId);
-    _replaceInPresentation(pres, placeholderMap, row);
-    pres.saveAndClose();
-  }
 
-  let finalFile = newFile;
-  if (format === 'PDF') {
-    const pdfBlob = newFile.getBlob().getAs(MimeType.PDF);
-    const pdfFile = DriveApp.getFolderById(folderId).createFile(pdfBlob).setName(newFile.getName() + '.pdf');
-    finalFile = pdfFile;
-    newFile.setTrashed(true);
+    return { result: { item: itemLabel, status, url: finalFile.getUrl() }, folderId };
+  } catch (error) {
+    _logActivity({ ...logData, generator: 'Template', status: 'Error', details: error.message });
+    return { result: { item: itemLabel, status: `❌ ${error.message}` }, folderId };
   }
-  return { file: finalFile, status: `✅ Success (${format})` };
 }
 
-function _generateSheet(targetSpreadsheet, templateId, placeholderMap, rowData, sheetTarget, newSheetName, isCombined = false, usedSheetNames = null) {
-  const templateSpreadsheet = SpreadsheetApp.openById(templateId);
-  
-  let sheetsToProcess = [];
+function _processCombinedItem(state, itemNum, itemData, usedSheetNames) {
+  const itemLabel = state.sheetName === ROW_MODE_SHEET ? `Row ${itemNum}` : `Column ${_columnNumberToLetter(itemNum)}`;
+  const templateId = _safeTrim(itemData && itemData[0]);
+  let status = '✅ Success (Combined)';
+
+  try {
+    if (!templateId) throw new Error('Missing Template ID');
+
+    if (state.combinedRunType === 'sheets') {
+      const combinedSpreadsheet = SpreadsheetApp.openById(state.combinedFileId);
+      const sheetNameBase = _sanitizeSheetName(itemData && itemData[3] ? itemData[3] : `${itemLabel} Sheet`);
+      _generateSheet(combinedSpreadsheet, templateId, state.placeholderMap, itemData, state.options.sheetTarget, sheetNameBase, true, usedSheetNames);
+    } else {
+      const destinationFolder = DriveApp.getFolderById(state.folders[0].id);
+      const templateFile = DriveApp.getFileById(templateId);
+      const tempFile = templateFile.makeCopy(`temp_${itemLabel}_${Date.now()}`, destinationFolder);
+
+      try {
+        const mimeType = templateFile.getMimeType();
+        _generateDocOrSlide(tempFile, mimeType, state.placeholderMap, itemData);
+
+        if (state.combinedRunType === 'docs') {
+          const masterDoc = DocumentApp.openById(state.combinedFileId);
+          const sourceDoc = DocumentApp.openById(tempFile.getId());
+          _appendDocContent(masterDoc, sourceDoc, state.currentIndex > 0);
+          masterDoc.saveAndClose();
+        } else if (state.combinedRunType === 'slides') {
+          const masterPresentation = SlidesApp.openById(state.combinedFileId);
+          const sourcePresentation = SlidesApp.openById(tempFile.getId());
+          _appendSlides(masterPresentation, sourcePresentation);
+          masterPresentation.saveAndClose();
+        }
+      } finally {
+        tempFile.setTrashed(true);
+      }
+    }
+  } catch (error) {
+    status = `❌ Error: ${error.message}`;
+  }
+
+  const combinedFile = DriveApp.getFileById(state.combinedFileId);
+  state.results.push({ item: itemLabel, status, url: combinedFile.getUrl() });
+}
+
+function _finalizeCombinedRun(state) {
+  if (!state.isCombinedRun || !state.combinedFileId) return;
+
+  const combinedFile = DriveApp.getFileById(state.combinedFileId);
+  let finalFile = combinedFile;
+
+  if (state.combinedRunType === 'sheets') {
+    const spreadsheet = SpreadsheetApp.openById(state.combinedFileId);
+    const defaultSheet = spreadsheet.getSheetByName('Sheet1');
+    if (defaultSheet && spreadsheet.getSheets().length > 1) spreadsheet.deleteSheet(defaultSheet);
+  }
+
+  if (state.combinedRunType === 'slides') {
+    _removeEmptyFirstSlide(state.combinedFileId);
+  }
+
+  if ((state.combinedRunType === 'docs' || state.combinedRunType === 'slides') && state.options.format === 'PDF') {
+    const folder = DriveApp.getFolderById(state.folders[0].id);
+    finalFile = _convertFileToPdf(combinedFile, folder);
+    combinedFile.setTrashed(true);
+  }
+
+  _logActivity({
+    generator: `Combined ${state.combinedRunType}`,
+    fileName: finalFile.getName(),
+    fileUrl: finalFile.getUrl(),
+    folderUrl: state.folders.length ? state.folders[0].url : '',
+    status: 'Success',
+    details: `Combined ${state.results.filter((result) => result.status.startsWith('✅')).length} of ${state.totalItems} items.`,
+  });
+
+  state.combinedFinalUrl = finalFile.getUrl();
+}
+
+function _generateDocOrSlide(file, mimeType, placeholderMap, rowData) {
+  if (mimeType === APP_MIME.GOOGLE_DOCS) {
+    const doc = DocumentApp.openById(file.getId());
+    _replacePlaceholdersInDocument(doc, placeholderMap, rowData);
+    doc.saveAndClose();
+    return;
+  }
+
+  if (mimeType === APP_MIME.GOOGLE_SLIDES) {
+    const presentation = SlidesApp.openById(file.getId());
+    _replaceInPresentation(presentation, placeholderMap, rowData);
+    presentation.saveAndClose();
+    return;
+  }
+
+  throw new Error(`Unsupported document or slide type: ${mimeType}`);
+}
+
+function _generateSheet(targetSpreadsheet, templateId, placeholderMap, rowData, sheetTarget, newSheetName, isCombined, usedSheetNames) {
+  const replacementMap = _buildReplacementMap(placeholderMap, rowData);
+
+  if (isCombined) {
+    const templateSpreadsheet = SpreadsheetApp.openById(templateId);
+    const templateSheets = sheetTarget ? [templateSpreadsheet.getSheetByName(sheetTarget)] : templateSpreadsheet.getSheets();
+    if (templateSheets.some((sheet) => !sheet)) throw new Error(`Sheet "${sheetTarget}" not found in template.`);
+
+    templateSheets.forEach((templateSheet) => {
+      const copiedSheet = templateSheet.copyTo(targetSpreadsheet);
+      const preferredName = newSheetName || templateSheet.getName();
+      const uniqueName = _getUniqueSheetName(preferredName, usedSheetNames);
+      usedSheetNames.add(uniqueName);
+      copiedSheet.setName(uniqueName);
+      replacePlaceholdersInSheet(copiedSheet, replacementMap);
+    });
+    return;
+  }
+
+  const sheetsToProcess = [];
   if (sheetTarget) {
-    const targetSheet = templateSpreadsheet.getSheetByName(sheetTarget);
-    if (!targetSheet) throw new Error(`Sheet "${sheetTarget}" not found in template.`);
+    const targetSheet = targetSpreadsheet.getSheetByName(sheetTarget);
+    if (!targetSheet) throw new Error(`Sheet "${sheetTarget}" not found in copied spreadsheet.`);
+    targetSpreadsheet.getSheets().forEach((sheet) => {
+      if (sheet.getSheetId() !== targetSheet.getSheetId()) targetSpreadsheet.deleteSheet(sheet);
+    });
+    if (newSheetName) targetSheet.setName(_getUniqueSheetNameInSpreadsheet(targetSpreadsheet, newSheetName, targetSheet));
     sheetsToProcess.push(targetSheet);
   } else {
-    sheetsToProcess = templateSpreadsheet.getSheets();
-  }
-  
-  const originalSheetNames = isCombined ? [] : targetSpreadsheet.getSheets().map(s => s.getName());
-  
-  const rowPlaceholderMap = new Map();
-  Object.keys(placeholderMap).forEach(base => {
-    const placeholder = `{{${base}}}`;
-    const index = placeholderMap[base];
-    rowPlaceholderMap.set(placeholder, rowData[index]);
-  });
-  
-  sheetsToProcess.forEach(templateSheet => {
-    const copiedSheet = templateSheet.copyTo(targetSpreadsheet);
-    let finalSheetName = templateSheet.getName();
-
-    if (isCombined) {
-        const baseName = newSheetName || templateSheet.getName();
-        finalSheetName = _getUniqueSheetName(baseName, usedSheetNames);
-        usedSheetNames.add(finalSheetName);
-    } else if (sheetsToProcess.length === 1 && newSheetName) {
-        finalSheetName = newSheetName;
+    targetSpreadsheet.getSheets().forEach((sheet) => sheetsToProcess.push(sheet));
+    if (newSheetName && sheetsToProcess.length === 1) {
+      sheetsToProcess[0].setName(_getUniqueSheetNameInSpreadsheet(targetSpreadsheet, newSheetName, sheetsToProcess[0]));
     }
-    
-    copiedSheet.setName(finalSheetName);
-    replacePlaceholdersInSheet(copiedSheet, rowPlaceholderMap);
+  }
+
+  sheetsToProcess.forEach((sheet) => replacePlaceholdersInSheet(sheet, replacementMap));
+  SpreadsheetApp.flush();
+}
+
+function replacePlaceholdersInSheet(sheet, replacementMap) {
+  replacementMap.forEach((value, placeholder) => {
+    sheet.createTextFinder(placeholder).matchCase(false).replaceAllWith(value == null ? '' : String(value));
   });
-  
-  if (!isCombined) {
-    originalSheetNames.forEach(sheetName => {
-        const sheetToDelete = targetSpreadsheet.getSheetByName(sheetName);
-        if (sheetToDelete) targetSpreadsheet.deleteSheet(sheetToDelete);
+}
+
+function _replacePlaceholdersInDocument(doc, placeholderMap, rowData) {
+  [doc.getHeader(), doc.getBody(), doc.getFooter()].forEach((section) => {
+    if (!section) return;
+    Object.keys(placeholderMap).forEach((base) => {
+      _replaceInSection(section, base, rowData[placeholderMap[base]]);
     });
+  });
+}
+
+function _replaceInSection(section, base, rawValue) {
+  const regex = _placeholderRegexString(base);
+  let found = section.findText(regex);
+
+  while (found) {
+    const textElement = found.getElement().asText();
+    const start = found.getStartOffset();
+    const end = found.getEndOffsetInclusive();
+    const matchedText = textElement.getText().substring(start, end + 1);
+    const modifier = _extractModifier(base, matchedText);
+    const existingUrl = _safeGetTextLink(textElement, start);
+    const imageBlob = _getImageBlob(rawValue);
+
+    textElement.deleteText(start, end);
+
+    if (imageBlob) {
+      _insertImageAfterTextElement(textElement, imageBlob);
+    } else {
+      const replacementText = _applyModifiers(rawValue, modifier);
+      if (replacementText) {
+        textElement.insertText(start, replacementText);
+        const replacementEnd = start + replacementText.length - 1;
+        if (modifier.includes('b')) textElement.setBold(start, replacementEnd, true);
+        if (existingUrl) textElement.setLinkUrl(start, replacementEnd, existingUrl);
+        else if (/^https?:\/\//i.test(replacementText)) textElement.setLinkUrl(start, replacementEnd, replacementText);
+      }
+    }
+
+    found = section.findText(regex, found);
   }
 }
 
-function _getUniqueSheetName(baseName, usedNamesSet) {
-  if (!usedNamesSet.has(baseName)) return baseName;
-  let i = 1;
-  while (true) {
-    const newName = `${baseName} (${i})`;
-    if (!usedNamesSet.has(newName)) return newName;
-    i++;
+function _replaceInPresentation(presentation, placeholderMap, rowData) {
+  presentation.getSlides().forEach((slide) => {
+    Object.keys(placeholderMap).forEach((base) => {
+      const rawValue = rowData[placeholderMap[base]];
+      if (!_replacePlaceholderAsImageInSlide(slide, base, rawValue)) {
+        _replacePlaceholderAsTextInSlide(slide, base, rawValue);
+      }
+    });
+  });
+}
+
+function _replacePlaceholderAsImageInSlide(slide, base, rawValue) {
+  const blob = _getImageBlob(rawValue);
+  if (!blob) return false;
+
+  const canonicalPlaceholder = `{{${base}}}`;
+  const shapes = slide.getShapes();
+
+  for (let i = 0; i < shapes.length; i++) {
+    const shape = shapes[i];
+    try {
+      if (!shape.getText) continue;
+      if (shape.getText().asString().trim() !== canonicalPlaceholder) continue;
+
+      const image = slide.insertImage(blob);
+      image.setLeft(shape.getLeft()).setTop(shape.getTop()).setWidth(shape.getWidth()).setHeight(shape.getHeight());
+      shape.remove();
+      return true;
+    } catch (error) {
+      // Keep searching other shapes.
+    }
   }
+
+  return false;
+}
+
+function _replacePlaceholderAsTextInSlide(slide, base, rawValue) {
+  const regex = _placeholderRegex(base);
+  const elements = _getSlideTextElements(slide);
+
+  elements.forEach((element) => {
+    try {
+      const textRange = element.getText();
+      const originalText = textRange.asString();
+      const matches = [];
+      let match;
+      while ((match = regex.exec(originalText)) !== null) matches.push(match);
+
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const currentMatch = matches[i];
+        const placeholder = currentMatch[0];
+        const modifier = currentMatch[1] || '';
+        const replacementText = _applyModifiers(rawValue, modifier);
+        const start = currentMatch.index;
+        const end = start + placeholder.length;
+        const placeholderRange = textRange.getRange(start, end);
+        let existingUrl = null;
+
+        try {
+          const link = placeholderRange.getTextStyle().getLink();
+          if (link) existingUrl = link.getUrl();
+        } catch (error) {}
+
+        placeholderRange.setText(replacementText);
+
+        if (replacementText) {
+          const replacementRange = textRange.getRange(start, start + replacementText.length);
+          if (modifier.includes('b')) replacementRange.getTextStyle().setBold(true);
+          if (existingUrl) replacementRange.getTextStyle().setLinkUrl(existingUrl);
+          else if (/^https?:\/\//i.test(replacementText)) replacementRange.getTextStyle().setLinkUrl(replacementText);
+        }
+      }
+    } catch (error) {
+      // Skip unsupported slide elements.
+    }
+  });
+}
+
+function _getSlideTextElements(slide) {
+  const elements = [];
+  slide.getShapes().forEach((shape) => elements.push(shape));
+  slide.getTables().forEach((table) => {
+    for (let row = 0; row < table.getNumRows(); row++) {
+      for (let col = 0; col < table.getNumColumns(); col++) {
+        elements.push(table.getCell(row, col));
+      }
+    }
+  });
+  return elements;
 }
 
 function _sendEmailNotification(file, recipient, subjectTemplate, bodyTemplate, rowData, placeholderMap) {
   try {
-    file.addEditor(recipient);
-    const subject = _replacePlaceholdersInEmail(subjectTemplate, rowData, placeholderMap);
-    const body = _replacePlaceholdersInEmail(bodyTemplate, rowData, placeholderMap);
-    MailApp.sendEmail({ to: recipient, subject: subject, htmlBody: body, attachments: [file.getBlob()] });
+    file.addViewer(recipient);
+    const subject = _replacePlaceholdersInEmail(subjectTemplate || `Generated file: ${file.getName()}`, rowData, placeholderMap);
+    const htmlBody = _replacePlaceholdersInEmail(bodyTemplate || '<p>Your generated file is attached.</p>', rowData, placeholderMap);
+    MailApp.sendEmail({ to: recipient, subject, htmlBody, attachments: [file.getBlob()] });
     return { status: `✅ Emailed to ${recipient}`, logStatus: 'Sent' };
-  } catch (e) {
-    return { status: `⚠️ Success, but email failed: ${e.message}`, logStatus: `Failed: ${e.message}` };
+  } catch (error) {
+    return { status: `⚠️ Success, but email failed: ${error.message}`, logStatus: `Failed: ${error.message}` };
   }
+}
+
+function _replacePlaceholdersInEmail(template, rowData, placeholderMap) {
+  let result = template || '';
+  Object.keys(placeholderMap).forEach((base) => {
+    result = result.replace(_placeholderRegex(base), (match, modifier) => {
+      let value = _escapeHtml(_applyModifiers(rowData[placeholderMap[base]], modifier || ''));
+      if ((modifier || '').includes('b')) value = `<b>${value}</b>`;
+      return value;
+    });
+  });
+  return result;
+}
+
+function _applyModifiers(rawValue, modifier) {
+  if (rawValue === null || typeof rawValue === 'undefined') return '';
+  let value = String(rawValue);
+
+  if (!/[a-zA-Z]/.test(value)) {
+    const maybeDate = new Date(value);
+    if (!isNaN(maybeDate.getTime()) && /^\d{1,4}[\-/]\d{1,2}[\-/]\d{1,4}|\d{4}-\d{2}-\d{2}T/.test(value)) {
+      value = Utilities.formatDate(maybeDate, Session.getScriptTimeZone(), 'MMMM dd, yyyy');
+    }
+  }
+
+  if (modifier === 'u' || modifier === 'ub') value = value.toUpperCase();
+  if (modifier === '1' || modifier === '1b') value = value.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+  return value;
+}
+
+function _buildReplacementMap(placeholderMap, rowData) {
+  const replacements = new Map();
+  Object.keys(placeholderMap).forEach((base) => {
+    const value = rowData[placeholderMap[base]];
+    ['', 'u', 'ub', 'b', '1', '1b'].forEach((modifier) => {
+      const placeholder = modifier ? `{{${base}}${modifier}}`.replace('}}', '}') + '}' : `{{${base}}}`;
+      replacements.set(placeholder, _applyModifiers(value, modifier));
+    });
+  });
+  return replacements;
+}
+
+function _getEmailTemplates(sendEmail) {
+  if (!sendEmail) return { subject: '', body: '' };
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const emailSheet = ss && ss.getSheetByName(EMAIL_SHEET);
+    if (!emailSheet) return { subject: '', body: '' };
+
+    const values = emailSheet.getDataRange().getValues();
+    const subject = values[1] ? values[1][1] || values[1][0] || '' : '';
+    const body = values[2] ? values[2][1] || values[2][0] || '' : '';
+    return { subject, body };
+  } catch (error) {
+    return { subject: '', body: '' };
+  }
+}
+
+function _getSelectedRows(ss, sheetName) {
+  const selectedRows = new Set();
+  const rangeList = ss.getActiveRangeList();
+  if (!rangeList) return selectedRows;
+
+  rangeList.getRanges().forEach((range) => {
+    if (range.getSheet().getName() !== sheetName) return;
+    for (let i = 0; i < range.getNumRows(); i++) {
+      const row = range.getRow() + i;
+      if (row >= 3) selectedRows.add(row);
+    }
+  });
+
+  return selectedRows;
+}
+
+function _getSelectedColumns(ss, sheetName) {
+  const selectedColumns = new Set();
+  const rangeList = ss.getActiveRangeList();
+  if (!rangeList) return selectedColumns;
+
+  rangeList.getRanges().forEach((range) => {
+    if (range.getSheet().getName() !== sheetName) return;
+    for (let i = 0; i < range.getNumColumns(); i++) {
+      const column = range.getColumn() + i;
+      if (column >= 2) selectedColumns.add(column);
+    }
+  });
+
+  return selectedColumns;
+}
+
+function _buildPlaceholderMap(headerRow, startIndex) {
+  const placeholderMap = {};
+  headerRow.forEach((header, columnIndex) => {
+    const match = _safeTrim(header).match(/^\{\{(.+?)\}\}$/);
+    if (match && columnIndex >= startIndex) placeholderMap[match[1]] = columnIndex;
+  });
+  return placeholderMap;
+}
+
+function _buildColumnPlaceholderMap(data, startIndex) {
+  const placeholderMap = {};
+  data.forEach((row, rowIndex) => {
+    const match = _safeTrim(row && row[0]).match(/^\{\{(.+?)\}\}$/);
+    if (match && rowIndex >= startIndex) placeholderMap[match[1]] = rowIndex;
+  });
+  return placeholderMap;
+}
+
+function _getItemTypes(selectedItems, sheet, data) {
+  const types = { docs: [], slides: [], sheets: [], unsupported: [] };
+
+  selectedItems.forEach((itemNum) => {
+    const templateId = sheet.getName() === ROW_MODE_SHEET
+      ? _safeTrim(data[itemNum - 1] && data[itemNum - 1][0])
+      : _safeTrim(data[0] && data[0][itemNum - 1]);
+
+    try {
+      if (!templateId) return;
+      const mimeType = DriveApp.getFileById(templateId).getMimeType();
+      if (mimeType === APP_MIME.GOOGLE_DOCS) types.docs.push(itemNum);
+      else if (mimeType === APP_MIME.GOOGLE_SLIDES) types.slides.push(itemNum);
+      else if (mimeType === APP_MIME.GOOGLE_SHEETS) types.sheets.push(itemNum);
+      else types.unsupported.push(itemNum);
+    } catch (error) {
+      types.unsupported.push(itemNum);
+    }
+  });
+
+  return types;
+}
+
+function _createTrigger() {
+  _deleteTrigger();
+  ScriptApp.newTrigger(TRIGGER_HANDLER).timeBased().after(GENERATOR_LIMITS.triggerDelayMs).create();
+}
+
+function _deleteTrigger() {
+  ScriptApp.getProjectTriggers().forEach((trigger) => {
+    if (trigger.getHandlerFunction() === TRIGGER_HANDLER) ScriptApp.deleteTrigger(trigger);
+  });
 }
 
 function _getLogSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheetName = 'Log';
-  let logSheet = ss.getSheetByName(logSheetName);
-  if (!logSheet) {
-    logSheet = ss.insertSheet(logSheetName);
+  if (!ss) return null;
+
+  const logSheet = _getOrCreateSheet(ss, LOG_SHEET);
+  if (logSheet.getLastRow() === 0) {
     const headers = ['Timestamp', 'Generator', 'File Name', 'File URL', 'Folder URL', 'Recipient', 'Email Status', 'Status', 'Details'];
     logSheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     logSheet.setFrozenRows(1);
@@ -432,576 +927,392 @@ function _getLogSheet() {
 }
 
 function _logActivity(logData) {
-  const logSheet = _getLogSheet();
-  const timestamp = new Date();
-  const logEntry = {
-    generator: 'N/A', fileName: 'N/A', fileUrl: 'N/A', folderUrl: 'N/A',
-    recipient: 'N/A', emailStatus: 'N/A', status: 'Unknown', details: '', ...logData
+  try {
+    const logSheet = _getLogSheet();
+    if (!logSheet) return;
+
+    const entry = {
+      generator: 'N/A',
+      fileName: 'N/A',
+      fileUrl: 'N/A',
+      folderUrl: 'N/A',
+      recipient: 'N/A',
+      emailStatus: 'N/A',
+      status: 'Unknown',
+      details: '',
+      ...logData,
+    };
+
+    logSheet.appendRow([
+      new Date(),
+      entry.generator,
+      entry.fileName,
+      entry.fileUrl,
+      entry.folderUrl,
+      entry.recipient,
+      entry.emailStatus,
+      entry.status,
+      entry.details,
+    ]);
+  } catch (error) {
+    // Logging must never break generation.
+  }
+}
+
+function _prepareCombinedDocument(fileId) {
+  const doc = DocumentApp.openById(fileId);
+  doc.getBody().clear();
+  doc.saveAndClose();
+}
+
+function _prepareCombinedPresentation(fileId) {
+  const presentation = SlidesApp.openById(fileId);
+  const slides = presentation.getSlides();
+  for (let i = slides.length - 1; i > 0; i--) slides[i].remove();
+  presentation.getSlides()[0].getPageElements().forEach((element) => element.remove());
+  presentation.saveAndClose();
+}
+
+function _appendDocContent(masterDoc, sourceDoc, addPageBreak) {
+  const masterBody = masterDoc.getBody();
+  const sourceBody = sourceDoc.getBody();
+
+  if (addPageBreak && masterBody.getNumChildren() > 0) masterBody.appendPageBreak();
+
+  for (let i = 0; i < sourceBody.getNumChildren(); i++) {
+    const child = sourceBody.getChild(i).copy();
+    const type = child.getType();
+
+    if (type === DocumentApp.ElementType.PARAGRAPH) masterBody.appendParagraph(child);
+    else if (type === DocumentApp.ElementType.TABLE) masterBody.appendTable(child);
+    else if (type === DocumentApp.ElementType.LIST_ITEM) masterBody.appendListItem(child);
+    else if (type === DocumentApp.ElementType.HORIZONTAL_RULE) masterBody.appendHorizontalRule();
+    else masterBody.appendParagraph(child.asText ? child.asText().getText() : '');
+  }
+}
+
+function _appendSlides(masterPresentation, sourcePresentation) {
+  sourcePresentation.getSlides().forEach((slide) => {
+    masterPresentation.insertSlide(masterPresentation.getSlides().length, slide);
+  });
+}
+
+function _removeEmptyFirstSlide(fileId) {
+  const presentation = SlidesApp.openById(fileId);
+  const slides = presentation.getSlides();
+  if (slides.length > 1 && slides[0].getPageElements().length === 0) slides[0].remove();
+  presentation.saveAndClose();
+}
+
+function _convertFileToPdf(file, folder) {
+  const pdfBlob = file.getBlob().getAs(MimeType.PDF).setName(`${file.getName()}.pdf`);
+  return folder.createFile(pdfBlob);
+}
+
+function _getImageBlob(rawValue) {
+  const value = _safeTrim(rawValue);
+  if (!value) return null;
+
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const response = UrlFetchApp.fetch(value, { muteHttpExceptions: true });
+      if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
+        const blob = response.getBlob();
+        return blob.getContentType().startsWith('image/') ? blob : null;
+      }
+    } catch (error) {
+      return null;
+    }
+  }
+
+  if (/^[a-zA-Z0-9_-]{25,}$/.test(value)) {
+    try {
+      const file = DriveApp.getFileById(value);
+      return file.getMimeType().startsWith('image/') ? file.getBlob() : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function _insertImageAfterTextElement(textElement, blob) {
+  try {
+    const parent = textElement.getParent();
+    if (parent && parent.insertInlineImage && parent.getChildIndex) {
+      parent.insertInlineImage(parent.getChildIndex(textElement) + 1, blob);
+    }
+  } catch (error) {
+    // If image insertion fails, leave the placeholder removed instead of crashing generation.
+  }
+}
+
+function _safeGetTextLink(textElement, offset) {
+  try {
+    return textElement.getLinkUrl(offset);
+  } catch (error) {
+    return null;
+  }
+}
+
+function _placeholderRegex(base) {
+  return new RegExp(_placeholderRegexString(base), 'g');
+}
+
+function _placeholderRegexString(base) {
+  return `\\{\\{${_escapeRegExp(base)}(?:\\}(u|ub|b|1|1b))?\\}\\}`;
+}
+
+function _extractModifier(base, matchedText) {
+  const match = matchedText.match(new RegExp(`^${_placeholderRegexString(base)}$`));
+  return match && match[1] ? match[1] : '';
+}
+
+function _getUniqueSheetName(baseName, usedNamesSet) {
+  let safeBase = _sanitizeSheetName(baseName || 'Sheet');
+  if (!usedNamesSet.has(safeBase)) return safeBase;
+
+  let index = 2;
+  while (usedNamesSet.has(`${safeBase} ${index}`)) index += 1;
+  return `${safeBase} ${index}`;
+}
+
+function _getUniqueSheetNameInSpreadsheet(spreadsheet, preferredName, currentSheet) {
+  const baseName = _sanitizeSheetName(preferredName || 'Sheet');
+  const existing = spreadsheet.getSheets()
+    .filter((sheet) => !currentSheet || sheet.getSheetId() !== currentSheet.getSheetId())
+    .map((sheet) => sheet.getName());
+
+  if (existing.indexOf(baseName) === -1) return baseName;
+  let index = 2;
+  while (existing.indexOf(`${baseName} ${index}`) !== -1) index += 1;
+  return `${baseName} ${index}`;
+}
+
+function _getOrCreateSheet(ss, sheetName) {
+  return ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
+}
+
+function _columnNumberToLetter(columnNumber) {
+  let number = columnNumber;
+  let letter = '';
+  while (number > 0) {
+    const remainder = (number - 1) % 26;
+    letter = String.fromCharCode(65 + remainder) + letter;
+    number = Math.floor((number - 1) / 26);
+  }
+  return letter;
+}
+
+function _safeTrim(value) {
+  return value === null || typeof value === 'undefined' ? '' : String(value).trim();
+}
+
+function _sanitizeFileName(value) {
+  const cleaned = _safeTrim(value)
+    .replace(/[\u0000-\u001f]/g, '')
+    .replace(/[\\/]/g, '-')
+    .replace(/\s+/g, ' ')
+    .slice(0, GENERATOR_LIMITS.maxNameLength);
+  return cleaned || 'Generated File';
+}
+
+function _sanitizeSheetName(value) {
+  const cleaned = _safeTrim(value)
+    .replace(/[\\/?*\[\]:]/g, '-')
+    .slice(0, 90);
+  return cleaned || 'Sheet';
+}
+
+function _clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.max(min, Math.min(max, Math.floor(number)));
+}
+
+function _escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// =================================================================================================
+// Standalone web app workspace generator used by Index.html
+// =================================================================================================
+
+function getDefaultWorkspaceConfig() {
+  return {
+    workspaceName: 'Generated Workspace',
+    description: 'Created with Google Workspace Generator.',
+    documents: [
+      { name: 'Project Brief', body: 'Purpose\n\nScope\n\nDeliverables\n\nTimeline' },
+    ],
+    spreadsheets: [
+      {
+        name: 'Tracker',
+        sheets: [
+          {
+            name: 'Tasks',
+            values: [
+              ['Task', 'Owner', 'Status', 'Due Date'],
+              ['Example task', '', 'Not started', ''],
+            ],
+          },
+        ],
+      },
+    ],
+    presentations: [
+      { name: 'Overview Deck', title: 'Generated Workspace', subtitle: 'Created with Google Workspace Generator' },
+    ],
   };
-  logSheet.appendRow([
-    timestamp, logEntry.generator, logEntry.fileName, logEntry.fileUrl,
-    logEntry.folderUrl, logEntry.recipient, logEntry.emailStatus,
-    logEntry.status, logEntry.details
-  ]);
 }
 
-function _applyModifiers(rawValue, mod) {
-  if (rawValue === null || rawValue === undefined || rawValue === '') return '';
-  
-  let str = String(rawValue); // Safely convert any type to string
-  const hasLetters = /[a-zA-Z]/.test(str);
-  
-  if (!hasLetters) {
-    const dateLikeRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?Z?)?$|^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/;
-    if (dateLikeRegex.test(str)) {
-      const parsed = new Date(str);
-      if (!isNaN(parsed.getTime())) {
-        return Utilities.formatDate(parsed, Session.getScriptTimeZone(), 'MMMM dd, yyyy');
-      }
-    }
-  }
-  
-  const proper = s => s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-  switch (mod) {
-    case 'u': case 'ub': str = str.toUpperCase(); break;
-    case '1': case '1b': str = proper(str); break;
-  }
-  return str;
+function generateWorkspace(rawConfig) {
+  const config = _normalizeWorkspaceConfig(rawConfig);
+  const errors = _validateWorkspaceConfig(config);
+  if (errors.length) throw new Error(errors.join(' '));
+
+  const folder = DriveApp.createFolder(config.workspaceName);
+  if (config.description) folder.setDescription(config.description);
+
+  const resources = [];
+  config.documents.forEach((docConfig) => resources.push(_createSimpleDocument(docConfig, folder)));
+  config.spreadsheets.forEach((sheetConfig) => resources.push(_createSimpleSpreadsheet(sheetConfig, folder)));
+  config.presentations.forEach((slideConfig) => resources.push(_createSimplePresentation(slideConfig, folder)));
+
+  return {
+    appName: APP_NAME,
+    createdAt: new Date().toISOString(),
+    workspace: _folderToResource(folder),
+    resources,
+    summary: {
+      totalFiles: resources.length,
+      documents: config.documents.length,
+      spreadsheets: config.spreadsheets.length,
+      presentations: config.presentations.length,
+    },
+  };
 }
 
-function _isDriveFileId(str) {
-  return typeof str === 'string' && /^[a-zA-Z0-9_-]{25,}$/.test(str);
+function _normalizeWorkspaceConfig(rawConfig) {
+  let input = rawConfig || {};
+  if (typeof input === 'string') input = JSON.parse(input);
+  const defaults = getDefaultWorkspaceConfig();
+
+  return {
+    workspaceName: _sanitizeFileName(input.workspaceName || defaults.workspaceName),
+    description: _safeTrim(input.description).slice(0, GENERATOR_LIMITS.maxDescriptionLength),
+    documents: _asArray(input.documents).map((item, index) => ({
+      name: _sanitizeFileName(typeof item === 'string' ? item : item && item.name || `Document ${index + 1}`),
+      body: _safeTrim(item && item.body).slice(0, GENERATOR_LIMITS.maxDocumentBodyLength),
+    })),
+    spreadsheets: _asArray(input.spreadsheets).map((item, index) => ({
+      name: _sanitizeFileName(typeof item === 'string' ? item : item && item.name || `Spreadsheet ${index + 1}`),
+      sheets: _asArray(item && item.sheets).length ? _asArray(item.sheets).map((sheet, sheetIndex) => ({
+        name: _sanitizeSheetName(sheet && sheet.name || `Sheet ${sheetIndex + 1}`),
+        values: _normalizeSimpleSheetValues(sheet && sheet.values),
+      })) : [{ name: 'Sheet1', values: [] }],
+    })),
+    presentations: _asArray(input.presentations).map((item, index) => ({
+      name: _sanitizeFileName(typeof item === 'string' ? item : item && item.name || `Presentation ${index + 1}`),
+      title: _safeTrim(item && item.title || item && item.name || `Presentation ${index + 1}`).slice(0, GENERATOR_LIMITS.maxNameLength),
+      subtitle: _safeTrim(item && item.subtitle).slice(0, GENERATOR_LIMITS.maxDescriptionLength),
+    })),
+  };
 }
 
-// ------------------------------------------------------------------
-// FIXED: _replaceInSection (Handles image validation and URL linking)
-// ------------------------------------------------------------------
-function _replaceInSection(section, base, rawValue) {
-  if (!section) return;
-  const modPattern = 'u|ub|b|1|1b';
-  const regexStr = `\\{\\{${base}(?:\\}(${modPattern}))?\\}\\}`;
-  let found = section.findText(regexStr);
-  
-  while (found) {
-    const el = found.getElement().asText();
-    const start = found.getStartOffset();
-    const end = found.getEndOffsetInclusive();
-    const elText = el.getText();
-    
-    // Ensure the placeholder match doesn't span across multiple boundaries.
-    if (start < 0 || end >= elText.length || start > end) {
-        found = section.findText(regexStr, found);
-        continue;
-    }
+function _validateWorkspaceConfig(config) {
+  const errors = [];
+  const total = config.documents.length + config.spreadsheets.length + config.presentations.length;
+  if (!config.workspaceName) errors.push('Workspace name is required.');
+  if (total < 1) errors.push('Generate at least one file.');
+  if (config.documents.length > GENERATOR_LIMITS.maxSimpleDocs) errors.push(`Maximum documents allowed: ${GENERATOR_LIMITS.maxSimpleDocs}.`);
+  if (config.spreadsheets.length > GENERATOR_LIMITS.maxSimpleSheets) errors.push(`Maximum spreadsheets allowed: ${GENERATOR_LIMITS.maxSimpleSheets}.`);
+  if (config.presentations.length > GENERATOR_LIMITS.maxSimpleSlides) errors.push(`Maximum presentations allowed: ${GENERATOR_LIMITS.maxSimpleSlides}.`);
+  if (total > GENERATOR_LIMITS.maxSimpleFiles) errors.push(`Maximum total files allowed: ${GENERATOR_LIMITS.maxSimpleFiles}.`);
+  return errors;
+}
 
-    const matchedText = elText.substring(start, end + 1);
-    const modMatch = matchedText.match(new RegExp(`^${regexStr}$`));
-    const mod = (modMatch && modMatch[1]) || '';
-    
-    let isImage = false, blob;
-    if (typeof rawValue === 'string') {
-      if (/^https?:\/\//i.test(rawValue)) {
-        try { 
-          const response = UrlFetchApp.fetch(rawValue, {muteHttpExceptions: true});
-          if (response.getResponseCode() === 200) {
-             const tempBlob = response.getBlob();
-             // Prevent crash: Ensure the URL actually points to an image
-             if (tempBlob.getContentType().startsWith('image/')) {
-                 blob = tempBlob; 
-                 isImage = true;
-             }
-          }
-        } catch (_) {}
-      } else if (_isDriveFileId(rawValue)) {
-        try { 
-          const file = DriveApp.getFileById(rawValue);
-          // Prevent crash: Ensure the Drive file is actually an image
-          if (file.getMimeType().startsWith('image/')) {
-             blob = file.getBlob(); 
-             isImage = true; 
-          }
-        } catch (_) {}
-      }
-    }
-    
-    // Capture any hyperlink already applied to the template placeholder
-    const existingUrl = el.getLinkUrl(start);
-    el.deleteText(start, end);
-    
-    if (isImage && blob) {
-      const parent = el.getParent().asParagraph();
-      const idx = parent.getChildIndex(el);
-      const full = el.getText();
-      const before = full.substring(0, start);
-      const after = full.substring(start);
-      parent.removeChild(el);
-      if (before) parent.insertText(idx, before);
-      parent.insertInlineImage(idx + (before ? 1 : 0), blob);
-      if (after) parent.insertText(idx + (before ? 2 : 1), after);
+function _createSimpleDocument(config, folder) {
+  const doc = DocumentApp.create(config.name);
+  const body = doc.getBody();
+  body.clear();
+  body.appendParagraph(config.name).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  (config.body || 'Generated by Google Workspace Generator.').split('\n').forEach((line) => body.appendParagraph(line));
+  doc.saveAndClose();
+  return _fileToResource(_moveFileToFolder(doc.getId(), folder), 'document');
+}
+
+function _createSimpleSpreadsheet(config, folder) {
+  const spreadsheet = SpreadsheetApp.create(config.name);
+  const existingSheets = spreadsheet.getSheets();
+
+  config.sheets.forEach((sheetConfig, index) => {
+    const sheet = index === 0 ? existingSheets[0] : spreadsheet.insertSheet();
+    sheet.setName(_getUniqueSheetNameInSpreadsheet(spreadsheet, sheetConfig.name, sheet));
+    if (sheetConfig.values.length) {
+      const width = Math.max(1, Math.max.apply(null, sheetConfig.values.map((row) => row.length)));
+      const values = sheetConfig.values.map((row) => {
+        const normalized = row.slice(0, width);
+        while (normalized.length < width) normalized.push('');
+        return normalized;
+      });
+      sheet.getRange(1, 1, values.length, width).setValues(values);
+      sheet.setFrozenRows(1);
+      sheet.autoResizeColumns(1, width);
     } else {
-      const txt = _applyModifiers(rawValue, mod);
-      el.insertText(start, txt);
-      
-      if (txt.length > 0) {
-        // Re-apply Bold
-        if (mod.includes('b')) {
-          el.setBold(start, start + txt.length - 1, true);
-        }
-        // Restore template link, OR auto-link if the value is a standard web address
-        if (existingUrl) {
-          el.setLinkUrl(start, start + txt.length - 1, existingUrl);
-        } else if (/^https?:\/\//i.test(txt)) {
-          el.setLinkUrl(start, start + txt.length - 1, txt);
-        }
-      }
+      sheet.getRange(1, 1).setValue('Generated by Google Workspace Generator');
     }
-    found = section.findText(regexStr, found);
-  }
+  });
+
+  SpreadsheetApp.flush();
+  return _fileToResource(_moveFileToFolder(spreadsheet.getId(), folder), 'spreadsheet');
 }
 
-function _replaceInPresentation(presentation, placeholderMap, rowData) {
-  presentation.getSlides().forEach(slide => {
-    Object.keys(placeholderMap).forEach(base => {
-      const rawValue = rowData[placeholderMap[base]];
-      if (rawValue === null || rawValue === undefined || rawValue === '') return;
-      const replacedAsImage = _replacePlaceholderAsImageInSlide(slide, base, rawValue);
-      if (!replacedAsImage) {
-        _replacePlaceholderAsTextInSlide(slide, base, rawValue);
-      }
+function _createSimplePresentation(config, folder) {
+  const presentation = SlidesApp.create(config.name);
+  const slide = presentation.getSlides()[0];
+  slide.getPageElements().forEach((element) => element.remove());
+  slide.insertTextBox(config.title || config.name, 60, 80, 600, 70).getText().getTextStyle().setFontSize(32).setBold(true);
+  slide.insertTextBox(config.subtitle || 'Generated by Google Workspace Generator', 60, 170, 600, 80).getText().getTextStyle().setFontSize(16);
+  presentation.saveAndClose();
+  return _fileToResource(_moveFileToFolder(presentation.getId(), folder), 'presentation');
+}
+
+function _normalizeSimpleSheetValues(values) {
+  if (!Array.isArray(values)) return [];
+  return values.slice(0, GENERATOR_LIMITS.maxSimpleSheetRows).map((row) => {
+    const sourceRow = Array.isArray(row) ? row : [row];
+    return sourceRow.slice(0, GENERATOR_LIMITS.maxSimpleSheetColumns).map((cell) => {
+      if (cell === null || typeof cell === 'undefined') return '';
+      if (['string', 'number', 'boolean'].indexOf(typeof cell) !== -1) return cell;
+      return String(cell);
     });
   });
 }
 
-// ------------------------------------------------------------------
-// FIXED: _replacePlaceholderAsImageInSlide 
-// ------------------------------------------------------------------
-function _replacePlaceholderAsImageInSlide(slide, base, rawValue) {
-  let blob;
-  if (typeof rawValue === 'string') {
-    if (/^https?:\/\//i.test(rawValue)) {
-      try { 
-        const response = UrlFetchApp.fetch(rawValue, {muteHttpExceptions: true});
-        if (response.getResponseCode() === 200) {
-          const tempBlob = response.getBlob();
-          if (tempBlob.getContentType().startsWith('image/')) {
-             blob = tempBlob;
-          }
-        }
-      } catch (e) {}
-    } else if (_isDriveFileId(rawValue)) {
-      try { 
-        const file = DriveApp.getFileById(rawValue);
-        if (file.getMimeType().startsWith('image/')) {
-           blob = file.getBlob();
-        }
-      } catch (e) {}
-    }
-  }
-  
-  if (!blob) return false;
-  
-  const placeholder = `{{${base}}}`;
-  let shapeToReplace = null;
-  slide.getShapes().forEach(shape => {
-    if (shape.getText && shape.getText().asString().trim() === placeholder) {
-      shapeToReplace = shape;
-    }
-  });
-  
-  if (shapeToReplace) {
-    const img = slide.insertImage(blob);
-    img.setWidth(shapeToReplace.getWidth());
-    img.setHeight(shapeToReplace.getHeight());
-    img.setLeft(shapeToReplace.getLeft());
-    img.setTop(shapeToReplace.getTop());
-    shapeToReplace.remove();
-    return true;
-  }
-  return false;
+function _moveFileToFolder(fileId, folder) {
+  const file = DriveApp.getFileById(fileId);
+  file.moveTo(folder);
+  return file;
 }
 
-// ------------------------------------------------------------------
-// FIXED: _replacePlaceholderAsTextInSlide 
-// ------------------------------------------------------------------
-function _replacePlaceholderAsTextInSlide(slide, base, rawValue) {
-  const modPattern = 'u|ub|b|1|1b';
-  const regex = new RegExp(`\\{\\{${base}(?:\\}(${modPattern}))?\\}\\}`, 'g');
-  const elements = [...slide.getShapes(), ...slide.getTables().flatMap(table => {
-    const cells = [];
-    for (let r = 0; r < table.getNumRows(); r++) {
-      for (let c = 0; c < table.getNumColumns(); c++) {
-        cells.push(table.getCell(r, c));
-      }
-    }
-    return cells;
-  })];
-  
-  elements.forEach(element => {
-    try {
-      if (!element.getText || !element.getText().asString()) return;
-      const textRange = element.getText();
-      const matches = [];
-      let match;
-      while ((match = regex.exec(textRange.asString())) !== null) {
-        matches.push(match);
-      }
-      
-      for (let i = matches.length - 1; i >= 0; i--) {
-        match = matches[i];
-        const placeholder = match[0];
-        const mod = match[1] || '';
-        const replacementText = _applyModifiers(rawValue, mod);
-        const startIndex = match.index;
-        const endIndex = startIndex + placeholder.length;
-        
-        const specificRange = textRange.getRange(startIndex, endIndex);
-        
-        // Capture existing link attached to the Slide placeholder
-        let existingUrl = null;
-        try {
-          const link = specificRange.getTextStyle().getLink();
-          if (link) existingUrl = link.getUrl();
-        } catch(e) {}
-
-        specificRange.setText(replacementText);
-        
-        if (replacementText.length > 0) {
-          const newRange = textRange.getRange(startIndex, startIndex + replacementText.length);
-          
-          if (mod.includes('b')) {
-            newRange.getTextStyle().setBold(true);
-          }
-          
-          // Apply link back to text
-          if (existingUrl) {
-            newRange.getTextStyle().setLinkUrl(existingUrl);
-          } else if (/^https?:\/\//i.test(replacementText)) {
-            newRange.getTextStyle().setLinkUrl(replacementText);
-          }
-        }
-      }
-    } catch (e) {}
-  });
+function _fileToResource(file, type) {
+  return { id: file.getId(), type, name: file.getName(), url: file.getUrl(), mimeType: file.getMimeType() };
 }
 
-function _replacePlaceholdersInEmail(template, rowData, placeholderMap) {
-  if (!template) return '';
-  let result = template;
-  Object.keys(placeholderMap).forEach(base => {
-    const modPattern = 'u|ub|b|1|1b';
-    const regex = new RegExp(`\\{\\{${base}(?:\\}(${modPattern}))?\\}\\}`, 'g');
-    result = result.replace(regex, (match, mod = '') => {
-      const rawValue = rowData[placeholderMap[base]];
-      let processedValue = _applyModifiers(rawValue, mod);
-      if (mod.includes('b')) {
-        processedValue = `<b>${processedValue}</b>`;
-      }
-      return processedValue;
-    });
-  });
-  return result;
+function _folderToResource(folder) {
+  return { id: folder.getId(), type: 'folder', name: folder.getName(), url: folder.getUrl() };
 }
 
-function replacePlaceholdersInSheet(sheet, placeholderMap) {
-  placeholderMap.forEach((value, placeholder) => {
-    let displayValue = value != null ? String(value) : '';
-    sheet.createTextFinder(placeholder).replaceAllWith(displayValue);
-  });
-}
-
-function _getSelectedRows(ss, sheetName) {
-    const selectedRows = new Set();
-    const rl = ss.getActiveRangeList();
-    if (rl) {
-        rl.getRanges().forEach(r => {
-            if (r.getSheet().getName() === sheetName) {
-                for (let i = 0; i < r.getNumRows(); i++) {
-                    const rn = r.getRow() + i;
-                    if (rn >= 3) selectedRows.add(rn);
-                }
-            }
-        });
-    }
-    return selectedRows;
-}
-
-function _getSelectedColumns(ss, sheetName) {
-    const selectedCols = new Set();
-    const rl = ss.getActiveRangeList();
-    if (rl) {
-        rl.getRanges().forEach(r => {
-            if (r.getSheet().getName() === sheetName) {
-                for (let i = 0; i < r.getNumColumns(); i++) {
-                    const cn = r.getColumn() + i;
-                    if (cn >= 2) selectedCols.add(cn);
-                }
-            }
-        });
-    }
-    return selectedCols;
-}
-
-function _buildPlaceholderMap(headerRow, startIndex) {
-    const placeholderMap = {};
-    headerRow.forEach((h, c) => {
-        const m = (h || '').toString().trim().match(/^\{\{(.+?)\}\}$/);
-        if (m && c >= startIndex) placeholderMap[m[1]] = c;
-    });
-    return placeholderMap;
-}
-
-function _buildColumnPlaceholderMap(data, startIndex) {
-    const placeholderRowMap = {};
-    data.forEach((row, r) => {
-        const m = (row[0] || '').toString().trim().match(/^\{\{(.+?)\}\}$/);
-        if (m && r >= startIndex) placeholderRowMap[m[1]] = r;
-    });
-    return placeholderRowMap;
-}
-
-function _getItemTypes(selectedItems, sheet, data) {
-    const types = { docs: [], slides: [], sheets: [] };
-    selectedItems.forEach(itemNum => {
-        let templateId;
-        if (sheet.getName() === 'R-DOC-GEN') {
-            templateId = data[itemNum - 1][0];
-        } else { 
-            templateId = data[0][itemNum - 1];
-        }
-        try {
-            if (templateId) {
-                const mimeType = DriveApp.getFileById(templateId).getMimeType();
-                if (mimeType === MimeType.GOOGLE_DOCS) types.docs.push(itemNum);
-                else if (mimeType === MimeType.GOOGLE_SLIDES) types.slides.push(itemNum);
-                else if (mimeType === MimeType.GOOGLE_SHEETS) types.sheets.push(itemNum);
-            }
-        } catch(e) {}
-    });
-    return types;
-}
-
-function _initializeCombinedRun(type, itemTypes, baseState, data) {
-    const itemsToCombine = (type === 'docs') ? itemTypes.docs : (type === 'slides') ? itemTypes.slides : itemTypes.sheets;
-    const firstItemNum = itemsToCombine[0];
-    
-    let folderId, firstTemplateId, firstItemData;
-    if (baseState.sheetName === 'R-DOC-GEN') {
-        firstTemplateId = data[firstItemNum - 1][0];
-        folderId = data[firstItemNum - 1][1];
-        firstItemData = data[firstItemNum - 1];
-    } else { 
-        firstTemplateId = data[0][firstItemNum - 1];
-        folderId = data[1][firstItemNum - 1];
-        firstItemData = data.map(row => row[firstItemNum - 1]);
-    }
-    if (!folderId) throw new Error("The first selected item for combining is missing a Folder ID.");
-    
-    const destinationFolder = DriveApp.getFolderById(folderId);
-
-    if (type === 'sheets') {
-        const newFileName = baseState.options.combinedSheetName || 'Combined Spreadsheet';
-        const newSpreadsheet = SpreadsheetApp.create(newFileName);
-        const newFile = DriveApp.getFileById(newSpreadsheet.getId());
-        newFile.moveTo(destinationFolder);
-        baseState.combinedFileId = newFile.getId();
-    } else { 
-        const templateFile = DriveApp.getFileById(firstTemplateId);
-        const newFileName = baseState.options.combinedDocSlideName || 'Combined Document';
-        const newFile = templateFile.makeCopy(newFileName, destinationFolder);
-        baseState.combinedFileId = newFile.getId();
-        
-        if (type === 'docs') {
-            const mDoc = DocumentApp.openById(newFile.getId());
-            mDoc.getBody().clear(); 
-            [mDoc.getHeader(), mDoc.getFooter()].forEach(sec => {
-                 _replacePlaceholdersInSection(sec, baseState.placeholderMap, firstItemData);
-            });
-            mDoc.saveAndClose();
-        } else {
-            const mPres = SlidesApp.openById(newFile.getId());
-            mPres.getSlides().forEach(s => s.remove()); 
-            mPres.saveAndClose();
-        }
-    }
-
-    baseState.items = itemsToCombine;
-    baseState.totalItems = itemsToCombine.length;
-    baseState.folders = [{id: folderId, url: destinationFolder.getUrl()}];
-    baseState.isCombinedRun = true;
-    baseState.combinedRunType = type;
-    baseState.usedSheetNames = [];
-
-    const itemSet = new Set(itemsToCombine);
-    if(baseState.sheetName === 'R-DOC-GEN'){
-        baseState.relevantData = Array.from(_getSelectedRows(SpreadsheetApp.getActive(), baseState.sheetName))
-                                   .filter(rowNum => itemSet.has(rowNum))
-                                   .map(rowNum => data[rowNum-1]);
-    } else {
-        baseState.relevantData = Array.from(_getSelectedColumns(SpreadsheetApp.getActive(), baseState.sheetName))
-                                   .filter(colNum => itemSet.has(colNum))
-                                   .map(colNum => data.map(row => row[colNum-1]));
-    }
-
-    PropertiesService.getUserProperties().setProperty('generationState', JSON.stringify(baseState));
-}
-
-function _processCombinedItem(state, itemNum, itemData, usedSheetNames) {
-    let status = '❌ Failed';
-    let itemIdentifier = '';
-    
-    try {
-        let templateId;
-        if (state.sheetName === 'R-DOC-GEN') {
-            itemIdentifier = `Row ${itemNum}`;
-            templateId = itemData[0];
-        } else { 
-            itemIdentifier = `Column ${String.fromCharCode(65 + itemNum -1)}`;
-            templateId = itemData[0];
-        }
-
-        if (state.combinedRunType === 'sheets') {
-            const combinedSpreadsheet = SpreadsheetApp.openById(state.combinedFileId);
-            const sheetNameBase = itemData[3] || `${itemIdentifier}_Sheet`;
-            _generateSheet(combinedSpreadsheet, templateId, state.placeholderMap, itemData, state.options.sheetTarget, sheetNameBase, true, usedSheetNames);
-        } else { 
-            const templateFile = DriveApp.getFileById(templateId);
-            const tempDriveFile = templateFile.makeCopy(`temp_${itemIdentifier}`);
-            const tempFileId = tempDriveFile.getId();
-            
-            try {
-                if (state.combinedRunType === 'docs') {
-                    const tempDoc = DocumentApp.openById(tempFileId);
-                    [tempDoc.getHeader(), tempDoc.getBody(), tempDoc.getFooter()].forEach(sec => {
-                        _replacePlaceholdersInSection(sec, state.placeholderMap, itemData);
-                    });
-                    tempDoc.saveAndClose();
-                    
-                    const masterDoc = DocumentApp.openById(state.combinedFileId);
-                    _appendDocContent(masterDoc, DocumentApp.openById(tempFileId), state.currentIndex > 0);
-                    masterDoc.saveAndClose();
-                    
-                } else { 
-                    const tempPres = SlidesApp.openById(tempFileId);
-                    _replaceInPresentation(tempPres, state.placeholderMap, itemData);
-                    tempPres.saveAndClose();
-                    
-                    const masterPres = SlidesApp.openById(state.combinedFileId);
-                    _appendSlides(masterPres, SlidesApp.openById(tempFileId));
-                    masterPres.saveAndClose();
-                }
-            } finally {
-                tempDriveFile.setTrashed(true);
-            }
-        }
-        status = `✅ Success (Combined)`;
-    } catch(e) {
-        status = `❌ Error: ${e.message}`;
-    }
-    
-    const combinedFile = DriveApp.getFileById(state.combinedFileId);
-    state.results.push({ item: itemIdentifier, status: status, url: combinedFile.getUrl() });
-}
-
-function _processSeparateItem(state, itemNum, itemData) {
-    let result;
-    if (state.sheetName === 'R-DOC-GEN') {
-        const templateId = (itemData[0] || '').toString().trim();
-        if (templateId) {
-            result = _processSingleItem(`Row ${itemNum}`, templateId, itemData, state.placeholderMap, state.options, state.emailTemplates.subject, state.emailTemplates.body);
-        }
-    } else { 
-        const templateId = (itemData[0] || '').toString().trim();
-        if (templateId) {
-            result = _processSingleItem(`Column ${String.fromCharCode(65 + itemNum -1)}`, templateId, itemData, state.placeholderMap, state.options, state.emailTemplates.subject, state.emailTemplates.body);
-        }
-    }
-    if (result) {
-        state.results.push(result.result);
-        if(result.folderId) {
-            const folderSet = new Set(state.folders.map(f => f.id));
-            if(!folderSet.has(result.folderId)){
-                state.folders.push({id: result.folderId, url: `https://drive.google.com/drive/folders/${result.folderId}`});
-            }
-        }
-    }
-}
-
-function _finalizeCombinedRun(state) {
-  if (!state.isCombinedRun) return;
-
-  const combinedFile = DriveApp.getFileById(state.combinedFileId);
-  let finalFileUrl = combinedFile.getUrl();
-
-  if (state.combinedRunType === 'sheets') {
-      const combinedSpreadsheet = SpreadsheetApp.openById(state.combinedFileId);
-      const defaultSheet = combinedSpreadsheet.getSheetByName('Sheet1');
-      if (defaultSheet && combinedSpreadsheet.getSheets().length > 1) {
-          combinedSpreadsheet.deleteSheet(defaultSheet);
-      }
-  } else if (state.combinedRunType === 'slides') {
-      const combinedPresentation = SlidesApp.openById(state.combinedFileId);
-      if (combinedPresentation.getSlides().length > 1) {
-          const defaultSlide = combinedPresentation.getSlides()[0];
-          if (defaultSlide.getShapes().length === 0 && defaultSlide.getMasters()[0].getShapes().length === 0) {
-             defaultSlide.remove();
-          }
-      }
-  }
-
-  if ((state.combinedRunType === 'docs' || state.combinedRunType === 'slides') && state.options.format === 'PDF') {
-      const pdfBlob = combinedFile.getBlob().getAs(MimeType.PDF);
-      const pdfFile = DriveApp.getFolderById(state.folders[0].id).createFile(pdfBlob).setName(combinedFile.getName() + '.pdf');
-      finalFileUrl = pdfFile.getUrl();
-      combinedFile.setTrashed(true); 
-  }
-  
-   _logActivity({
-      generator: `Combined ${state.combinedRunType}`, 
-      fileName: state.options.combinedDocSlideName || state.options.combinedSheetName || 'Combined Output', 
-      fileUrl: finalFileUrl,
-      folderUrl: state.folders.length > 0 ? state.folders[0].url : '', 
-      status: 'Success',
-      details: `Combined ${state.results.filter(r => r.status.startsWith('✅')).length} of ${state.totalItems} items.`
-  });
-}
-
-function _replacePlaceholdersInSection(section, placeholderMap, data) {
-    if (!section) return;
-    Object.keys(placeholderMap).forEach(base => {
-        const index = placeholderMap[base];
-        _replaceInSection(section, base, data[index]);
-    });
-}
-
-function _appendDocContent(masterDoc, sourceDoc, isNotFirstItem) {
-    const masterBody = masterDoc.getBody();
-    if (isNotFirstItem) {
-        masterBody.appendPageBreak();
-    }
-    
-    const sourceBody = sourceDoc.getBody();
-    const numChildren = sourceBody.getNumChildren();
-    for (let i = 0; i < numChildren; i++) {
-        const child = sourceBody.getChild(i);
-        const type = child.getType();
-        
-        if (type === DocumentApp.ElementType.PARAGRAPH) {
-            masterBody.appendParagraph(child.copy());
-        } else if (type === DocumentApp.ElementType.TABLE) {
-            masterBody.appendTable(child.copy());
-        } else if (type === DocumentApp.ElementType.LIST_ITEM) {
-            masterBody.appendListItem(child.copy());
-        }
-    }
-
-    if (!isNotFirstItem && masterBody.getChild(0).getType() === DocumentApp.ElementType.PARAGRAPH && masterBody.getChild(0).asText().getText() === '') {
-        masterBody.removeChild(masterBody.getChild(0));
-    }
-}
-
-function _appendSlides(masterPres, sourcePres) {
-    const slides = sourcePres.getSlides();
-    for (let i = 0; i < slides.length; i++) {
-        masterPres.insertSlide(masterPres.getSlides().length, slides[i]);
-    }
+function _asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
