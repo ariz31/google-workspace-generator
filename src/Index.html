@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Workspace Generator</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe4ef;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #b91c1c;
+      --success: #15803d;
+      --shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 42%);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1100px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    header {
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2rem, 4vw, 3.25rem);
+      letter-spacing: -0.04em;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 1.25rem;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #334155;
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 12px;
+      color: var(--text);
+      font: inherit;
+      background: #ffffff;
+    }
+
+    textarea {
+      min-height: 260px;
+      resize: vertical;
+      font-family: Consolas, Monaco, 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--primary);
+      outline: 3px solid rgba(37, 99, 235, 0.14);
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .help {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 14px 0;
+      color: #334155;
+      font-weight: 700;
+    }
+
+    .toggle-row input {
+      width: auto;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    button.primary:hover {
+      background: var(--primary-dark);
+    }
+
+    button.secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .status {
+      display: none;
+      margin-top: 16px;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 700;
+    }
+
+    .status.error {
+      display: block;
+      color: var(--danger);
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+    }
+
+    .status.success {
+      display: block;
+      color: var(--success);
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+    }
+
+    .status.info {
+      display: block;
+      color: #1d4ed8;
+      background: #dbeafe;
+      border: 1px solid #bfdbfe;
+    }
+
+    .result-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .resource {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: #f8fafc;
+    }
+
+    .resource strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .resource a {
+      color: var(--primary);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      border-radius: 14px;
+      background: #f1f5f9;
+      padding: 12px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .stat strong {
+      font-size: 1.3rem;
+    }
+
+    @media (max-width: 860px) {
+      .layout,
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Google Workspace Generator</h1>
+      <p class="subtitle">Create a Google Drive folder with Docs, Sheets, and Slides from a simple form or advanced JSON configuration.</p>
+    </header>
+
+    <section class="layout" aria-label="Workspace generator form and results">
+      <form class="card" id="generatorForm">
+        <h2>Workspace setup</h2>
+
+        <div class="field">
+          <label for="workspaceName">Workspace name</label>
+          <input id="workspaceName" name="workspaceName" value="Generated Workspace" maxlength="120" required>
+        </div>
+
+        <div class="field">
+          <label for="description">Description</label>
+          <input id="description" name="description" value="Created with Google Workspace Generator." maxlength="500">
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="documentCount">Docs</label>
+            <input id="documentCount" name="documentCount" type="number" min="0" max="20" value="1">
+          </div>
+
+          <div class="field">
+            <label for="spreadsheetCount">Sheets</label>
+            <input id="spreadsheetCount" name="spreadsheetCount" type="number" min="0" max="20" value="1">
+          </div>
+
+          <div class="field">
+            <label for="presentationCount">Slides</label>
+            <input id="presentationCount" name="presentationCount" type="number" min="0" max="20" value="1">
+          </div>
+        </div>
+
+        <label class="toggle-row" for="useAdvancedJson">
+          <input id="useAdvancedJson" type="checkbox">
+          Use advanced JSON instead of the guided form
+        </label>
+
+        <div class="field">
+          <label for="advancedJson">Advanced JSON</label>
+          <textarea id="advancedJson" spellcheck="false"></textarea>
+          <p class="help">Use this when you need custom file names, document bodies, spreadsheet values, or slide text.</p>
+        </div>
+
+        <div class="actions">
+          <button class="primary" type="submit" id="generateButton">Generate workspace</button>
+          <button class="secondary" type="button" id="previewButton">Preview JSON</button>
+          <button class="secondary" type="button" id="resetButton">Reset sample</button>
+        </div>
+
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </form>
+
+      <aside class="card" aria-label="Generation results">
+        <h2>Results</h2>
+        <p class="help">Generated Drive links will appear here after the workspace is created.</p>
+        <div id="results"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('generatorForm');
+    const statusBox = document.getElementById('status');
+    const resultsBox = document.getElementById('results');
+    const advancedJson = document.getElementById('advancedJson');
+    const generateButton = document.getElementById('generateButton');
+    const previewButton = document.getElementById('previewButton');
+    const resetButton = document.getElementById('resetButton');
+    const useAdvancedJson = document.getElementById('useAdvancedJson');
+
+    const fallbackConfig = {
+      workspaceName: 'Generated Workspace',
+      description: 'Created with Google Workspace Generator.',
+      documents: [
+        { name: 'Project Brief', body: 'Purpose\n\nScope\n\nDeliverables\n\nTimeline' },
+      ],
+      spreadsheets: [
+        {
+          name: 'Tracker',
+          sheets: [
+            {
+              name: 'Tasks',
+              values: [
+                ['Task', 'Owner', 'Status', 'Due Date'],
+                ['Example task', '', 'Not started', ''],
+              ],
+            },
+          ],
+        },
+      ],
+      presentations: [
+        { name: 'Overview Deck', title: 'Generated Workspace', subtitle: 'Created with Google Workspace Generator' },
+      ],
+    };
+
+    form.addEventListener('submit', handleSubmit);
+    previewButton.addEventListener('click', previewJson);
+    resetButton.addEventListener('click', resetSample);
+
+    initialize();
+
+    function initialize() {
+      if (window.google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((config) => setAdvancedJson(config || fallbackConfig))
+          .withFailureHandler(() => setAdvancedJson(fallbackConfig))
+          .getDefaultConfig();
+      } else {
+        setAdvancedJson(fallbackConfig);
+        setStatus('info', 'Local preview mode: deploy this as an Apps Script web app to generate files.');
+      }
+    }
+
+    function handleSubmit(event) {
+      event.preventDefault();
+      clearResults();
+
+      const config = getSelectedConfig();
+      const localError = validateClientConfig(config);
+
+      if (localError) {
+        setStatus('error', localError);
+        return;
+      }
+
+      if (!(window.google && google.script && google.script.run)) {
+        setStatus('error', 'This page must run inside a deployed Google Apps Script web app to create files.');
+        return;
+      }
+
+      setBusy(true);
+      setStatus('info', 'Creating your workspace...');
+
+      google.script.run
+        .withSuccessHandler((result) => {
+          setBusy(false);
+          setStatus('success', 'Workspace created successfully.');
+          renderResults(result);
+        })
+        .withFailureHandler((error) => {
+          setBusy(false);
+          setStatus('error', error && error.message ? error.message : String(error));
+        })
+        .generateWorkspace(config);
+    }
+
+    function previewJson() {
+      try {
+        const config = buildGuidedConfig();
+        setAdvancedJson(config);
+        useAdvancedJson.checked = true;
+        setStatus('success', 'Preview JSON updated. You can edit it before generating.');
+      } catch (error) {
+        setStatus('error', error.message);
+      }
+    }
+
+    function resetSample() {
+      setAdvancedJson(fallbackConfig);
+      document.getElementById('workspaceName').value = fallbackConfig.workspaceName;
+      document.getElementById('description').value = fallbackConfig.description;
+      document.getElementById('documentCount').value = fallbackConfig.documents.length;
+      document.getElementById('spreadsheetCount').value = fallbackConfig.spreadsheets.length;
+      document.getElementById('presentationCount').value = fallbackConfig.presentations.length;
+      setStatus('success', 'Sample configuration restored.');
+    }
+
+    function getSelectedConfig() {
+      if (useAdvancedJson.checked) {
+        try {
+          return JSON.parse(advancedJson.value);
+        } catch (error) {
+          throw new Error('Advanced JSON is invalid: ' + error.message);
+        }
+      }
+
+      return buildGuidedConfig();
+    }
+
+    function buildGuidedConfig() {
+      const workspaceName = document.getElementById('workspaceName').value.trim();
+      const description = document.getElementById('description').value.trim();
+      const documentCount = readCount('documentCount');
+      const spreadsheetCount = readCount('spreadsheetCount');
+      const presentationCount = readCount('presentationCount');
+
+      return {
+        workspaceName,
+        description,
+        documents: Array.from({ length: documentCount }, (_, index) => ({
+          name: `${workspaceName || 'Workspace'} Doc ${index + 1}`,
+          body: 'Generated document. Replace this content with your own template text.',
+        })),
+        spreadsheets: Array.from({ length: spreadsheetCount }, (_, index) => ({
+          name: `${workspaceName || 'Workspace'} Sheet ${index + 1}`,
+          sheets: [
+            {
+              name: 'Tracker',
+              values: [
+                ['Item', 'Owner', 'Status', 'Notes'],
+                ['', '', '', ''],
+              ],
+            },
+          ],
+        })),
+        presentations: Array.from({ length: presentationCount }, (_, index) => ({
+          name: `${workspaceName || 'Workspace'} Deck ${index + 1}`,
+          title: workspaceName || 'Generated Workspace',
+          subtitle: 'Created with Google Workspace Generator',
+        })),
+      };
+    }
+
+    function readCount(id) {
+      const input = document.getElementById(id);
+      const value = Number.parseInt(input.value, 10);
+      return Number.isFinite(value) ? Math.max(0, Math.min(20, value)) : 0;
+    }
+
+    function validateClientConfig(config) {
+      if (!config || !String(config.workspaceName || '').trim()) {
+        return 'Workspace name is required.';
+      }
+
+      const totalFiles = count(config.documents) + count(config.spreadsheets) + count(config.presentations);
+
+      if (totalFiles < 1) {
+        return 'Choose at least one file to generate.';
+      }
+
+      if (totalFiles > 50) {
+        return 'Maximum total files allowed: 50.';
+      }
+
+      return '';
+    }
+
+    function count(value) {
+      return Array.isArray(value) ? value.length : 0;
+    }
+
+    function setAdvancedJson(config) {
+      advancedJson.value = JSON.stringify(config, null, 2);
+    }
+
+    function setBusy(isBusy) {
+      generateButton.disabled = isBusy;
+      generateButton.textContent = isBusy ? 'Generating...' : 'Generate workspace';
+    }
+
+    function setStatus(type, message) {
+      statusBox.className = `status ${type}`;
+      statusBox.textContent = message;
+    }
+
+    function clearResults() {
+      resultsBox.innerHTML = '';
+    }
+
+    function renderResults(result) {
+      const summary = result.summary || {};
+      const resources = result.resources || [];
+      const workspace = result.workspace || {};
+
+      resultsBox.innerHTML = `
+        <div class="resource">
+          <strong>${escapeHtml(workspace.name || 'Workspace folder')}</strong>
+          <a href="${escapeAttribute(workspace.url || '#')}" target="_blank" rel="noopener">Open workspace folder</a>
+        </div>
+        <div class="summary-grid">
+          ${renderStat('Total files', summary.totalFiles || resources.length)}
+          ${renderStat('Docs', summary.documents || 0)}
+          ${renderStat('Sheets', summary.spreadsheets || 0)}
+          ${renderStat('Slides', summary.presentations || 0)}
+        </div>
+        <div class="result-list">
+          ${resources.map(renderResource).join('')}
+        </div>
+      `;
+    }
+
+    function renderStat(label, value) {
+      return `<div class="stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    }
+
+    function renderResource(resource) {
+      return `
+        <div class="resource">
+          <strong>${escapeHtml(resource.name)}</strong>
+          <p class="help">${escapeHtml(resource.type)}</p>
+          <a href="${escapeAttribute(resource.url)}" target="_blank" rel="noopener">Open file</a>
+        </div>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value || '#');
+    }
+  </script>
+</body>
+</html>
