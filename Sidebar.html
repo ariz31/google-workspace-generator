@@ -1,496 +1,633 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
   <base target="_top">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generator Suite</title>
   <style>
-    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    
-    /* Modernized Button Styles */
-    .btn { 
-      display: inline-flex; align-items: center; justify-content: center; 
-      padding: 0.625rem 1rem; border-radius: 0.5rem; font-weight: 600; 
-      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
-      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe4ef;
+      --primary: #4f46e5;
+      --primary-dark: #4338ca;
+      --success: #15803d;
+      --danger: #b91c1c;
+      --warning: #b45309;
+      --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     }
-    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-    .btn:active:not(:disabled) { transform: translateY(1px); }
-    .btn-primary { background-color: #4f46e5; color: white; }
-    .btn-primary:hover:not(:disabled) { background-color: #4338ca; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); }
-    .btn-secondary { background-color: #e2e8f0; color: #475569; }
-    .btn-secondary:hover:not(:disabled) { background-color: #cbd5e1; }
-    .btn-cancel { background-color: #f43f5e; color: white; }
-    .btn-cancel:hover:not(:disabled) { background-color: #e11d48; box-shadow: 0 4px 6px -1px rgba(244, 63, 94, 0.3); }
-    
-    .icon { font-size: 1.25rem; vertical-align: middle; }
-    
-    /* Smooth Cards */
-    .card { background-color: white; border-radius: 0.75rem; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-    
-    /* Form Inputs */
-    .input-field {
-      width: 100%; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem;
-      font-size: 0.875rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
     }
-    .input-field:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-    
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 16px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+    }
+
+    main {
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: #f8fafc;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      color: #334155;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .card-body { padding: 14px; }
+
+    .stack { display: grid; gap: 12px; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .between { justify-content: space-between; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: #334155;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: inherit;
+      color: var(--text);
+      background: #ffffff;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.14);
+    }
+
+    .radio-row,
+    .check-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .radio-row label,
+    .check-row label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .section {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #f8fafc;
+    }
+
+    .section h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+    }
+
+    .muted { color: var(--muted); font-size: 12px; }
     .hidden { display: none !important; }
-    
-    /* Animations */
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    .animate-spin { animation: spin 1s linear infinite; }
-    
-    /* Custom Scrollbar for Logs */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+    }
+
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { cursor: not-allowed; opacity: 0.6; }
+
+    .btn-primary { background: var(--primary); color: #ffffff; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+    .btn-secondary { background: #e2e8f0; color: #1e293b; }
+    .btn-danger { background: #fee2e2; color: var(--danger); }
+    .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 999px; }
+    .btn-full { width: 100%; }
+
+    .status {
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .status.info { color: #1d4ed8; background: #dbeafe; border: 1px solid #bfdbfe; }
+    .status.success { color: var(--success); background: #dcfce7; border: 1px solid #bbf7d0; }
+    .status.error { color: var(--danger); background: #fee2e2; border: 1px solid #fecaca; }
+    .status.warning { color: var(--warning); background: #fef3c7; border: 1px solid #fde68a; }
+
+    .pill-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-weight: 700;
+      font-size: 11px;
+    }
+
+    .progress-wrap { display: grid; gap: 7px; }
+    .progress-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+    .progress-track { height: 9px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.25s ease; }
+
+    .list { display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+    .item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .item strong { display: block; margin-bottom: 3px; }
+    .item a { color: var(--primary); font-weight: 700; word-break: break-word; }
+
+    .footer-actions {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
   </style>
 </head>
-<body class="text-slate-800 antialiased">
-
-  <header class="bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-4 flex items-center shadow-md sticky top-0 z-10">
-    <i class="material-icons icon mr-3">dynamic_feed</i>
-    <h1 class="text-lg font-bold tracking-tight">Generator Suite</h1>
+<body>
+  <header>
+    <h1>Generator Suite</h1>
+    <p>Docs, Slides, Sheets, PDF, email, QR, and batch generation.</p>
   </header>
 
-  <main class="p-4 space-y-4">
-    <div class="card p-4">
-      <div class="flex justify-between items-center mb-2">
-        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Current Selection</h2>
-        <button id="refresh-btn" class="text-slate-400 hover:text-indigo-600 transition-colors rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-indigo-500" title="Refresh Selection">
-          <i class="material-icons text-xl">refresh</i>
-        </button>
+  <main>
+    <section class="card">
+      <div class="card-header">
+        <h2>Current selection</h2>
+        <button id="refresh-btn" class="btn-secondary btn-icon" type="button" title="Refresh selection">↻</button>
       </div>
-      <div id="smart-selection-area" class="bg-slate-50 rounded-lg border border-slate-200 p-3 min-h-[4rem] flex flex-col justify-center transition-all">
-        </div>
-    </div>
+      <div class="card-body stack">
+        <div id="selection-status" class="status info">Checking selection...</div>
+        <div id="selection-details" class="muted"></div>
+        <div id="mime-pills" class="pill-list"></div>
+      </div>
+    </section>
 
-    <div class="card p-4">
-      <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">Configuration</h2>
-      
-      <div class="space-y-4">
-        <div id="doc-slide-options" class="hidden space-y-3 bg-indigo-50/50 p-3 rounded-md border border-indigo-100">
-           <div>
-              <label class="block text-sm font-semibold text-slate-700 mb-2">Output Mode</label>
-              <div class="flex gap-4">
-                <label class="flex items-center cursor-pointer">
-                  <input type="radio" name="docSlideOutputMode" value="separate" checked class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-                  <span class="ml-2 text-sm text-slate-700">Separate Files</span>
-                </label>
-                <label class="flex items-center cursor-pointer">
-                  <input type="radio" name="docSlideOutputMode" value="combined" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
-                  <span class="ml-2 text-sm text-slate-700">Combined</span>
-                </label>
+    <section class="card">
+      <div class="card-header">
+        <h2>Configuration</h2>
+      </div>
+      <div class="card-body stack">
+        <div id="doc-slide-options" class="section hidden">
+          <h3>Doc / Slide output</h3>
+          <div class="stack">
+            <div>
+              <label>Output mode</label>
+              <div class="radio-row">
+                <label><input type="radio" name="docSlideOutputMode" value="separate" checked> Separate files</label>
+                <label><input type="radio" name="docSlideOutputMode" value="combined"> Combined file</label>
               </div>
-           </div>
-           <div id="combined-doc-slide-name-container" class="hidden">
-              <label for="combinedDocSlideName" class="block text-xs font-medium text-slate-600 mb-1">Master File Name</label>
-              <input type="text" id="combinedDocSlideName" class="input-field" placeholder="e.g., Master Report">
-           </div>
-           <div id="doc-slide-format-container">
-            <label for="format" class="block text-xs font-medium text-slate-600 mb-1">File Format</label>
-            <select id="format" class="input-field bg-white cursor-pointer"></select>
-           </div>
+            </div>
+            <div id="combined-doc-slide-name-container" class="hidden">
+              <label for="combinedDocSlideName">Combined file name</label>
+              <input id="combinedDocSlideName" type="text" placeholder="e.g., Master Report">
+            </div>
+            <div id="doc-slide-format-container">
+              <label for="format">Format</label>
+              <select id="format">
+                <option value="DOC">Keep original format</option>
+                <option value="PDF">Convert to PDF</option>
+              </select>
+            </div>
+          </div>
         </div>
-        
-        <div id="sheet-options" class="hidden space-y-3 bg-emerald-50/50 p-3 rounded-md border border-emerald-100">
-           <div>
-              <label class="block text-sm font-semibold text-slate-700 mb-2">Output Mode</label>
-              <div class="flex gap-4">
-                <label class="flex items-center cursor-pointer">
-                  <input type="radio" name="sheetOutputMode" value="separate" checked class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
-                  <span class="ml-2 text-sm text-slate-700">Separate Files</span>
-                </label>
-                <label class="flex items-center cursor-pointer">
-                  <input type="radio" name="sheetOutputMode" value="combined" class="h-4 w-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
-                  <span class="ml-2 text-sm text-slate-700">Combined</span>
-                </label>
+
+        <div id="sheet-options" class="section hidden">
+          <h3>Sheet output</h3>
+          <div class="stack">
+            <div>
+              <label>Output mode</label>
+              <div class="radio-row">
+                <label><input type="radio" name="sheetOutputMode" value="separate" checked> Separate files</label>
+                <label><input type="radio" name="sheetOutputMode" value="combined"> Combined spreadsheet</label>
               </div>
-           </div>
-           <div id="combined-sheet-name-container" class="hidden">
-              <label for="combinedSheetName" class="block text-xs font-medium text-slate-600 mb-1">Master Spreadsheet Name</label>
-              <input type="text" id="combinedSheetName" class="input-field" placeholder="e.g., Q3 Report Summary">
-           </div>
-           <div>
-            <label for="sheetTarget" class="block text-xs font-medium text-slate-600 mb-1">Target Template Tab <span class="text-slate-400 font-normal">(Optional)</span></label>
-            <input type="text" id="sheetTarget" class="input-field" placeholder="e.g., 'Sheet1' (Blank copies all)">
-           </div>
-           <div id="new-sheet-name-container">
-            <label for="newSheetName" class="block text-xs font-medium text-slate-600 mb-1">Rename New Tab <span class="text-slate-400 font-normal">(Optional)</span></label>
-            <input type="text" id="newSheetName" class="input-field" placeholder="Overrides template tab name">
-           </div>
+            </div>
+            <div id="combined-sheet-name-container" class="hidden">
+              <label for="combinedSheetName">Combined spreadsheet name</label>
+              <input id="combinedSheetName" type="text" placeholder="e.g., Class Certificates">
+            </div>
+            <div>
+              <label for="sheetTarget">Target template tab</label>
+              <input id="sheetTarget" type="text" placeholder="Optional. Blank = all tabs">
+            </div>
+            <div id="new-sheet-name-container">
+              <label for="newSheetName">Rename output tab</label>
+              <input id="newSheetName" type="text" placeholder="Optional">
+            </div>
+          </div>
         </div>
-        
-        <div class="grid grid-cols-2 gap-4">
+
+        <div class="grid-2">
           <div>
-            <label for="batchSize" class="block text-xs font-medium text-slate-600 mb-1">Batch Size</label>
-            <input type="number" id="batchSize" value="5" min="1" max="50" class="input-field" title="Higher number = faster but higher timeout risk">
+            <label for="batchSize">Batch size</label>
+            <input id="batchSize" type="number" value="5" min="1" max="50">
+            <div class="muted">Lower is safer for large templates.</div>
           </div>
-          <div class="flex flex-col justify-end pb-2">
-            <label class="flex items-center cursor-pointer group">
-              <input id="sendEmail" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" checked>
-              <span class="ml-2 text-sm font-medium text-slate-700 group-hover:text-indigo-600 transition-colors">Send Emails</span>
-            </label>
+          <div>
+            <label>Email</label>
+            <div class="check-row" style="padding-top: 9px;">
+              <label><input id="sendEmail" type="checkbox"> Send email when recipient exists</label>
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div class="mt-5 flex items-center gap-2">
-        <button id="run" class="btn btn-primary flex-grow group relative overflow-hidden">
-          <span id="run-text" class="flex items-center justify-center relative z-10">
-            <i class="material-icons icon mr-2">play_arrow</i> Generate
-          </span>
-          <div id="run-spinner" class="absolute inset-0 flex items-center justify-center bg-indigo-600 hidden z-20">
-             <i class="material-icons icon animate-spin">autorenew</i>
-             <span class="ml-2">Processing...</span>
+
+        <div class="footer-actions">
+          <button id="run" class="btn-primary btn-full" type="button">Generate</button>
+          <button id="cancel" class="btn-danger" type="button">Cancel</button>
+          <button id="clear" class="btn-secondary" type="button">Clear</button>
+        </div>
+
+        <div id="message-area" class="status info hidden"></div>
+
+        <div id="progress-card" class="progress-wrap hidden">
+          <div class="progress-meta">
+            <span id="progress-text">0%</span>
+            <span id="progress-count">0/0</span>
           </div>
-        </button>
-        <button id="clr" class="btn btn-secondary border border-slate-200" title="Reset Interface">
-          <i class="material-icons icon text-slate-500">cleaning_services</i>
-        </button>
-      </div>
-
-      <div id="message-area" class="mt-3 text-center text-sm font-medium empty:hidden transition-opacity"></div>
-      
-      <div id="barWrap" class="mt-3 hidden">
-        <div class="flex justify-between text-xs text-slate-500 mb-1">
-          <span id="progress-text">0%</span>
-          <span id="progress-count">0/0 Items</span>
-        </div>
-        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden shadow-inner border border-slate-200">
-          <div id="bar" class="bg-indigo-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+          <div class="progress-track"><div id="bar" class="progress-bar"></div></div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div id="log-card" class="card hidden overflow-hidden">
-      <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
-        <h2 class="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center"><i class="material-icons icon mr-1 text-[1.1rem]">list_alt</i> Activity Log</h2>
+    <section id="results-card" class="card hidden">
+      <div class="card-header">
+        <h2>Activity log</h2>
       </div>
-      <div id="log" class="text-sm max-h-60 overflow-y-auto divide-y divide-slate-100"></div>
-    </div>
+      <div class="card-body">
+        <div id="log" class="list"></div>
+      </div>
+    </section>
 
-    <div id="folder-card" class="card hidden overflow-hidden">
-       <div class="bg-slate-50 px-4 py-2 border-b border-slate-200">
-        <h2 class="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center"><i class="material-icons icon mr-1 text-[1.1rem]">folder_open</i> Target Folders</h2>
+    <section id="folder-card" class="card hidden">
+      <div class="card-header">
+        <h2>Target folders</h2>
       </div>
-      <div id="folder-log" class="text-sm max-h-40 overflow-y-auto divide-y divide-slate-100"></div>
-    </div>
+      <div class="card-body">
+        <div id="folder-log" class="list"></div>
+      </div>
+    </section>
   </main>
 
   <script>
-    const $ = s => document.querySelector(s);
-    let currentSheetName = null;
+    const APP_MIME = {
+      DOCS: 'application/vnd.google-apps.document',
+      SLIDES: 'application/vnd.google-apps.presentation',
+      SHEETS: 'application/vnd.google-apps.spreadsheet',
+    };
+
+    const $ = (selector) => document.querySelector(selector);
+
+    const selectionStatus = $('#selection-status');
+    const selectionDetails = $('#selection-details');
+    const mimePills = $('#mime-pills');
+    const docSlideOptions = $('#doc-slide-options');
+    const sheetOptions = $('#sheet-options');
+    const combinedDocSlideNameContainer = $('#combined-doc-slide-name-container');
+    const combinedSheetNameContainer = $('#combined-sheet-name-container');
+    const newSheetNameContainer = $('#new-sheet-name-container');
+    const messageArea = $('#message-area');
+    const progressCard = $('#progress-card');
+    const progressText = $('#progress-text');
+    const progressCount = $('#progress-count');
+    const progressBar = $('#bar');
+    const logEl = $('#log');
+    const folderEl = $('#folder-log');
+    const resultsCard = $('#results-card');
+    const folderCard = $('#folder-card');
+    const runButton = $('#run');
+    const cancelButton = $('#cancel');
+    const clearButton = $('#clear');
+    const refreshButton = $('#refresh-btn');
+
+    let currentSelection = null;
     let poller = null;
-    let lastLoggedIndex = 0;
 
-    // Elements
-    const runBtn = $('#run'), clrBtn = $('#clr');
-    const runText = $('#run-text'), runSpinner = $('#run-spinner');
-    const formatSel = $('#format'), sendEmailCheck = $('#sendEmail');
-    const sheetTargetInput = $('#sheetTarget'), newSheetNameInput = $('#newSheetName');
-    const combinedSheetNameInput = $('#combinedSheetName'), combinedDocSlideNameInput = $('#combinedDocSlideName');
-    const batchSizeInput = $('#batchSize');
-    const logEl = $('#log'), folderEl = $('#folder-log');
-    const bar = $('#bar'), barWrap = $('#barWrap'), progressText = $('#progress-text'), progressCount = $('#progress-count');
-    const msg = $('#message-area');
-    const logCard = $('#log-card'), folderCard = $('#folder-card');
-    const docSlideOptions = $('#doc-slide-options'), sheetOptions = $('#sheet-options');
-    const smartSelectionArea = $('#smart-selection-area');
-    const refreshBtn = $('#refresh-btn');
-    
-    // Format Option Setup
-    const formatOptions = { "DOC": "Keep Original Format", "PDF": "Convert to PDF" };
-    function populateSelect(selectEl, options) {
-      selectEl.innerHTML = '';
-      Object.entries(options).forEach(([val, text]) => {
-          const option = document.createElement('option');
-          option.value = val; option.textContent = text;
-          selectEl.appendChild(option);
-      });
-    }
+    refreshButton.addEventListener('click', refreshSelection);
+    runButton.addEventListener('click', startGeneration);
+    cancelButton.addEventListener('click', cancelGeneration);
+    clearButton.addEventListener('click', clearOutput);
 
-    // UI Helpers
-    function showMessage(txt, type = 'info') {
-      const colors = { info: 'text-indigo-600', error: 'text-red-600', success: 'text-emerald-600' };
-      msg.innerHTML = `<span class="${colors[type]}">${txt}</span>`;
-    }
+    document.querySelectorAll('input[name="docSlideOutputMode"]').forEach((input) => {
+      input.addEventListener('change', updateModeVisibility);
+    });
 
-    function setButtonState(state) {
-        if (state === 'idle') {
-            runBtn.disabled = false;
-            runBtn.className = "btn btn-primary flex-grow group relative overflow-hidden";
-            runText.innerHTML = `<i class="material-icons icon mr-2">play_arrow</i> Generate`;
-            runSpinner.classList.add('hidden');
-            runText.classList.remove('hidden');
-            runBtn.onclick = handleRunClick;
-        } else if (state === 'running') {
-            runBtn.disabled = true;
-            runSpinner.classList.remove('hidden');
-            runText.classList.add('hidden');
-        } else if (state === 'cancel') {
-            runBtn.disabled = false;
-            runBtn.className = "btn btn-cancel flex-grow group relative overflow-hidden";
-            runText.innerHTML = `<i class="material-icons icon mr-2">stop</i> Cancel Process`;
-            runSpinner.classList.add('hidden');
-            runText.classList.remove('hidden');
-            runBtn.onclick = handleCancelClick;
-        }
-    }
+    document.querySelectorAll('input[name="sheetOutputMode"]').forEach((input) => {
+      input.addEventListener('change', updateModeVisibility);
+    });
 
-    function resetUI() {
-      if (poller) {
-        clearInterval(poller); poller = null;
-        google.script.run.cancelGeneration();
-      }
-      logCard.classList.add('hidden'); folderCard.classList.add('hidden');
-      logEl.innerHTML = ''; folderEl.innerHTML = '';
-      lastLoggedIndex = 0;
-      barWrap.classList.add('hidden'); bar.style.width = '0%';
-      msg.innerHTML = '';
-      setButtonState('idle');
-      checkActiveTemplate(); // Refresh selection
-    }
+    refreshSelection();
+    pollExistingStatus();
 
-    function updateProgress(current, total) {
-        barWrap.classList.remove('hidden');
-        const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-        bar.style.width = `${percent}%`;
-        progressText.innerText = `${percent}%`;
-        progressCount.innerText = `${current} / ${total} Items`;
-    }
-
-    // Array range formatter (e.g. [1,2,3,5,7,8] -> "1-3, 5, 7-8")
-    function formatRanges(nums) {
-        if (!nums || nums.length === 0) return 'None';
-        let ranges = [], rstart, rend;
-        for (let i = 0; i < nums.length; i++) {
-            rstart = nums[i]; rend = rstart;
-            while (nums[i + 1] - nums[i] == 1) { rend = nums[i + 1]; i++; }
-            ranges.push(rstart == rend ? rstart + '' : rstart + '-' + rend);
-        }
-        return ranges.join(', ');
-    }
-
-    // Backend Response Handlers
-    function updateSmartUI(details) {
-        const { sheetName, mimeTypes, selectedIndices } = details;
-        currentSheetName = sheetName;
-        docSlideOptions.classList.add('hidden'); sheetOptions.classList.add('hidden');
-        smartSelectionArea.innerHTML = '';
-        
-        let content = '', subtext = '';
-        
-        if (sheetName === 'R-DOC-GEN' || sheetName === 'C-DOC-GEN') {
-            const isRowMode = sheetName === 'R-DOC-GEN';
-            const modeName = isRowMode ? 'Row' : 'Column';
-            const modeNamePlural = isRowMode ? 'Rows' : 'Columns';
-            
-            if (!selectedIndices || selectedIndices.length === 0) {
-                runBtn.disabled = true;
-                content = `<div class="text-slate-500 text-sm">No valid templates selected.</div>`;
-                subtext = `Highlight ${modeNamePlural.toLowerCase()} containing a Drive File ID.`;
-            } else {
-                runBtn.disabled = false;
-                runText.innerHTML = `<i class="material-icons icon mr-2">play_arrow</i> Generate (${selectedIndices.length})`;
-                
-                // Format indices (Convert columns to letters if C-DOC-GEN)
-                const formattedSelection = isRowMode 
-                    ? formatRanges(selectedIndices) 
-                    : formatRanges(selectedIndices.map(c => c)).split(', ').map(str => {
-                        return str.split('-').map(num => String.fromCharCode(64 + parseInt(num))).join('-');
-                      }).join(', ');
-
-                content = `<div class="font-semibold text-slate-800 break-words"><span class="text-slate-500 font-normal">Selected ${modeNamePlural}:</span> ${formattedSelection}</div>`;
-                
-                let detectedHtml = '<div class="flex flex-wrap items-center justify-center gap-2 mt-2">';
-                mimeTypes.forEach(mimeType => {
-                    let typeName = 'Unknown', icon = 'help_outline', color = 'text-slate-500', bg = 'bg-slate-100';
-                    if(mimeType === 'application/vnd.google-apps.document') { typeName = 'Docs'; icon = 'description'; color = 'text-blue-600'; bg = 'bg-blue-50'; docSlideOptions.classList.remove('hidden'); }
-                    if(mimeType === 'application/vnd.google-apps.presentation') { typeName = 'Slides'; icon = 'slideshow'; color = 'text-amber-600'; bg = 'bg-amber-50'; docSlideOptions.classList.remove('hidden'); }
-                    if(mimeType === 'application/vnd.google-apps.spreadsheet') { typeName = 'Sheets'; icon = 'grid_on'; color = 'text-emerald-600'; bg = 'bg-emerald-50'; sheetOptions.classList.remove('hidden'); }
-                    detectedHtml += `<span class="${bg} ${color} border border-current/20 px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"><i class="material-icons text-[14px]">${icon}</i> ${typeName}</span>`;
-                });
-                detectedHtml += '</div>';
-                subtext = detectedHtml;
-            }
-        } else {
-            runBtn.disabled = true;
-            content = `<div class="text-amber-600 font-medium text-sm flex items-center justify-center"><i class="material-icons icon mr-1">warning</i> Wrong Sheet</div>`;
-            subtext = `Switch to 'R-DOC-GEN' or 'C-DOC-GEN' tab.`;
-        }
-        
-        smartSelectionArea.innerHTML = `
-          <div class="text-center w-full">
-            ${content}
-            <div class="text-xs text-slate-500 mt-1">${subtext}</div>
-          </div>
-        `;
-    }
-
-    function renderLog(items, isIncremental = false) {
-        if (!isIncremental) { logEl.innerHTML = ''; lastLoggedIndex = 0; }
-        if (!items || items.length === 0) return;
-        
-        logCard.classList.remove('hidden');
-        const newItems = items.slice(lastLoggedIndex);
-        
-        newItems.forEach(i => {
-            const div = document.createElement('div');
-            div.className = 'p-3 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors';
-            
-            let statusIcon = `<i class="material-icons text-slate-400">help</i>`;
-            if (i.status.includes('✅')) statusIcon = `<i class="material-icons text-emerald-500">check_circle</i>`;
-            else if (i.status.includes('❌')) statusIcon = `<i class="material-icons text-red-500">error</i>`;
-            else if (i.status.includes('⚠️')) statusIcon = `<i class="material-icons text-amber-500">warning</i>`;
-            
-            div.innerHTML = `
-              <div class="flex items-center gap-3 overflow-hidden">
-                ${statusIcon}
-                <div class="truncate">
-                  <span class="font-bold text-slate-700 text-sm block truncate">${i.item}</span>
-                  <span class="text-xs text-slate-500 truncate block">${i.status.substring(2)}</span>
-                </div>
-              </div>
-            `;
-
-            if (i.url) {
-                const link = document.createElement('a');
-                link.href = i.url; link.target = '_blank'; link.title = "Open File";
-                link.innerHTML = `<i class="material-icons text-lg">open_in_new</i>`;
-                link.className = 'ml-2 p-1.5 rounded-full text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex-shrink-0';
-                div.appendChild(link);
-            }
-            logEl.appendChild(div);
-            logEl.scrollTop = logEl.scrollHeight;
-        });
-        lastLoggedIndex = items.length;
-    }
-
-    function renderFolders(folders) {
-      if (!folders || !folders.length) return;
-      folderCard.classList.remove('hidden');
-      folderEl.innerHTML = '';
-      folders.forEach(f => {
-          const div = document.createElement('div');
-          div.className = 'p-3 flex justify-between items-center bg-white hover:bg-slate-50';
-          div.innerHTML = `
-            <span class="truncate pr-4 text-xs font-mono text-slate-600" title="${f.id}">${f.id}</span>
-            <a href="${f.url}" target="_blank" class="p-1.5 rounded-full text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-              <i class="material-icons text-lg">open_in_new</i>
-            </a>`;
-          folderEl.appendChild(div);
-      });
-    }
-
-    function pollForStatus() {
-        google.script.run
-            .withSuccessHandler(state => {
-                if (!state || state.status === 'idle') {
-                    if (poller) { clearInterval(poller); poller = null; }
-                    return;
-                }
-
-                updateProgress(state.currentIndex, state.totalItems);
-                renderLog(state.results || [], true);
-                renderFolders(state.folders || []);
-
-                if (state.status === 'complete') {
-                    if (poller) { clearInterval(poller); poller = null; }
-                    updateProgress(state.totalItems, state.totalItems);
-                    showMessage(`Process completed successfully!`, 'success');
-                    setButtonState('idle');
-                }
-            })
-            .withFailureHandler(e => {
-                if (poller) { clearInterval(poller); poller = null; }
-                showMessage(`Connection lost. Check logs.`, 'error');
-                setButtonState('idle');
-            })
-            .getGenerationStatus();
-    }
-
-    // Action Handlers
-    function checkActiveTemplate() {
-      refreshBtn.classList.add('animate-spin');
+    function refreshSelection() {
+      setSelectionMessage('Checking selection...', 'info');
       google.script.run
-        .withSuccessHandler(res => { updateSmartUI(res); refreshBtn.classList.remove('animate-spin'); })
-        .withFailureHandler(() => refreshBtn.classList.remove('animate-spin'))
+        .withSuccessHandler((details) => {
+          currentSelection = details || {};
+          renderSelection(currentSelection);
+        })
+        .withFailureHandler((error) => setSelectionMessage(errorMessage(error), 'error'))
         .getSelectionDetails();
     }
 
-    function handleCancelClick() {
-        setButtonState('running'); // show spinner while cancelling
-        showMessage('Cancelling process...', 'info');
-        google.script.run.withSuccessHandler(() => {
-            resetUI();
-            showMessage('Process cancelled.', 'info');
-        }).cancelGeneration();
+    function renderSelection(details) {
+      const selected = details.selectedIndices || [];
+      const mimeTypes = details.mimeTypes || [];
+      const invalid = details.invalidItems || [];
+
+      if (!selected.length) {
+        setSelectionMessage(details.message || 'Select rows in R-DOC-GEN or columns in C-DOC-GEN.', 'warning');
+      } else if (invalid.length) {
+        setSelectionMessage(`Selected ${selected.length} item(s), but ${invalid.length} has missing or invalid template IDs.`, 'warning');
+      } else {
+        setSelectionMessage(`Ready: ${selected.length} selected item(s).`, 'success');
+      }
+
+      selectionDetails.textContent = details.sheetName
+        ? `Sheet: ${details.sheetName} • Items: ${selected.join(', ') || 'none'}`
+        : 'No active sheet detected.';
+
+      mimePills.innerHTML = mimeTypes.length
+        ? mimeTypes.map((mime) => `<span class="pill">${escapeHtml(labelForMime(mime))}</span>`).join('')
+        : '<span class="pill">No supported template detected</span>';
+
+      const hasDocsOrSlides = mimeTypes.includes(APP_MIME.DOCS) || mimeTypes.includes(APP_MIME.SLIDES);
+      const hasSheets = mimeTypes.includes(APP_MIME.SHEETS);
+      docSlideOptions.classList.toggle('hidden', !hasDocsOrSlides);
+      sheetOptions.classList.toggle('hidden', !hasSheets);
+      updateModeVisibility();
     }
 
-    function handleRunClick() {
-        if (!currentSheetName) { showMessage("Cannot read sheet. Please refresh.", "error"); return; }
-        
-        setButtonState('running');
-        msg.innerHTML = ''; logCard.classList.remove('hidden'); folderCard.classList.add('hidden');
-        logEl.innerHTML = ''; lastLoggedIndex = 0;
-        updateProgress(0, 100); progressCount.innerText = "Initializing...";
-
-        const options = {
-            format: formatSel.value,
-            sendEmail: sendEmailCheck.checked,
-            sheetTarget: sheetTargetInput.value.trim(),
-            newSheetName: newSheetNameInput.value.trim(),
-            sheetOutputMode: document.querySelector('input[name="sheetOutputMode"]:checked').value,
-            combinedSheetName: combinedSheetNameInput.value.trim(),
-            docSlideOutputMode: document.querySelector('input[name="docSlideOutputMode"]:checked').value,
-            combinedDocSlideName: combinedDocSlideNameInput.value.trim(),
-            batchSize: parseInt(batchSizeInput.value, 10) || 5,
-        };
-
-        google.script.run
-            .withSuccessHandler(resp => {
-                if (resp.status === 'started') {
-                    setButtonState('cancel');
-                    if (poller) clearInterval(poller);
-                    poller = setInterval(pollForStatus, 2000); 
-                } else {
-                   setButtonState('idle');
-                   showMessage('Failed to initialize engine.', 'error');
-                }
-            })
-            .withFailureHandler(e => {
-                setButtonState('idle');
-                showMessage(`Error: ${e.message}`, 'error');
-            })
-            .runGenerator(options, currentSheetName);
+    function updateModeVisibility() {
+      const docMode = getRadioValue('docSlideOutputMode');
+      const sheetMode = getRadioValue('sheetOutputMode');
+      combinedDocSlideNameContainer.classList.toggle('hidden', docMode !== 'combined');
+      combinedSheetNameContainer.classList.toggle('hidden', sheetMode !== 'combined');
+      newSheetNameContainer.classList.toggle('hidden', sheetMode === 'combined');
     }
 
-    // Event Listeners for UI toggles
-    document.querySelectorAll('input[name="sheetOutputMode"]').forEach(r => r.addEventListener('change', e => {
-        const isC = e.target.value === 'combined';
-        $('#combined-sheet-name-container').classList.toggle('hidden', !isC);
-        $('#new-sheet-name-container').classList.toggle('hidden', isC);
-    }));
+    function startGeneration() {
+      if (!currentSelection || !currentSelection.selectedIndices || !currentSelection.selectedIndices.length) {
+        showMessage('Select valid rows or columns first.', 'warning');
+        return;
+      }
 
-    document.querySelectorAll('input[name="docSlideOutputMode"]').forEach(r => r.addEventListener('change', e => {
-        const isC = e.target.value === 'combined';
-        $('#combined-doc-slide-name-container').classList.toggle('hidden', !isC);
-        $('#doc-slide-format-container').classList.toggle('hidden', isC);
-    }));
-    
-    refreshBtn.addEventListener('click', checkActiveTemplate);
-    clrBtn.addEventListener('click', resetUI);
-    
-    // Init
-    window.onload = () => {
-        populateSelect(formatSel, formatOptions);
-        checkActiveTemplate();
-    };
+      const options = buildOptions();
+      clearOutput();
+      setBusy(true);
+      showMessage('Starting generation...', 'info');
+      progressCard.classList.remove('hidden');
+
+      google.script.run
+        .withSuccessHandler(() => {
+          showMessage('Generation started. Progress will update automatically.', 'info');
+          startPolling();
+        })
+        .withFailureHandler((error) => {
+          setBusy(false);
+          showMessage(errorMessage(error), 'error');
+        })
+        .runGenerator(options, currentSelection.sheetName);
+    }
+
+    function buildOptions() {
+      return {
+        format: $('#format').value,
+        sendEmail: $('#sendEmail').checked,
+        batchSize: Number($('#batchSize').value || 5),
+        sheetTarget: $('#sheetTarget').value.trim(),
+        newSheetName: $('#newSheetName').value.trim(),
+        sheetOutputMode: getRadioValue('sheetOutputMode'),
+        docSlideOutputMode: getRadioValue('docSlideOutputMode'),
+        combinedSheetName: $('#combinedSheetName').value.trim(),
+        combinedDocSlideName: $('#combinedDocSlideName').value.trim(),
+      };
+    }
+
+    function startPolling() {
+      stopPolling();
+      pollStatus();
+      poller = setInterval(pollStatus, 2000);
+    }
+
+    function pollExistingStatus() {
+      google.script.run
+        .withSuccessHandler((state) => {
+          if (state && state.status === 'running') startPolling();
+          else if (state && state.status && state.status !== 'idle') renderState(state);
+        })
+        .getGenerationStatus();
+    }
+
+    function pollStatus() {
+      google.script.run
+        .withSuccessHandler((state) => {
+          renderState(state || { status: 'idle' });
+          if (!state || ['complete', 'error', 'cancelled', 'idle'].includes(state.status)) {
+            stopPolling();
+            setBusy(false);
+            refreshSelection();
+          }
+        })
+        .withFailureHandler((error) => {
+          stopPolling();
+          setBusy(false);
+          showMessage(errorMessage(error), 'error');
+        })
+        .getGenerationStatus();
+    }
+
+    function renderState(state) {
+      const total = state.totalItems || 0;
+      const current = state.currentIndex || 0;
+      const percent = total ? Math.round((current / total) * 100) : 0;
+
+      progressCard.classList.toggle('hidden', state.status === 'idle');
+      progressBar.style.width = `${percent}%`;
+      progressText.textContent = `${percent}%`;
+      progressCount.textContent = `${current}/${total} item(s)`;
+
+      if (state.status === 'running') showMessage(`Running batch generation... ${current}/${total} processed.`, 'info');
+      else if (state.status === 'complete') showMessage('Generation complete.', 'success');
+      else if (state.status === 'error') showMessage(state.error || 'Generation failed.', 'error');
+      else if (state.status === 'cancelled') showMessage('Generation cancelled.', 'warning');
+
+      renderResults(state.results || []);
+      renderFolders(state.folders || []);
+    }
+
+    function renderResults(results) {
+      resultsCard.classList.toggle('hidden', !results.length);
+      logEl.innerHTML = results.map((result) => `
+        <div class="item">
+          <strong>${escapeHtml(result.item || 'Item')}</strong>
+          <div class="muted">${escapeHtml(result.status || '')}</div>
+          ${result.url ? `<a href="${escapeAttribute(result.url)}" target="_blank" rel="noopener">Open output</a>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function renderFolders(folders) {
+      folderCard.classList.toggle('hidden', !folders.length);
+      folderEl.innerHTML = folders.map((folder, index) => `
+        <div class="item">
+          <strong>Folder ${index + 1}</strong>
+          <a href="${escapeAttribute(folder.url)}" target="_blank" rel="noopener">Open folder</a>
+        </div>
+      `).join('');
+    }
+
+    function cancelGeneration() {
+      setBusy(true);
+      google.script.run
+        .withSuccessHandler((state) => {
+          stopPolling();
+          setBusy(false);
+          renderState(state || { status: 'cancelled' });
+        })
+        .withFailureHandler((error) => {
+          setBusy(false);
+          showMessage(errorMessage(error), 'error');
+        })
+        .cancelGeneration();
+    }
+
+    function clearOutput() {
+      logEl.innerHTML = '';
+      folderEl.innerHTML = '';
+      resultsCard.classList.add('hidden');
+      folderCard.classList.add('hidden');
+      progressCard.classList.add('hidden');
+      progressBar.style.width = '0%';
+      progressText.textContent = '0%';
+      progressCount.textContent = '0/0';
+      messageArea.classList.add('hidden');
+    }
+
+    function setBusy(isBusy) {
+      runButton.disabled = isBusy;
+      refreshButton.disabled = isBusy;
+      runButton.textContent = isBusy ? 'Working...' : 'Generate';
+    }
+
+    function setSelectionMessage(text, type) {
+      selectionStatus.className = `status ${type}`;
+      selectionStatus.textContent = text;
+    }
+
+    function showMessage(text, type) {
+      messageArea.className = `status ${type}`;
+      messageArea.textContent = text;
+    }
+
+    function stopPolling() {
+      if (poller) clearInterval(poller);
+      poller = null;
+    }
+
+    function getRadioValue(name) {
+      const checked = document.querySelector(`input[name="${name}"]:checked`);
+      return checked ? checked.value : 'separate';
+    }
+
+    function labelForMime(mime) {
+      if (mime === APP_MIME.DOCS) return 'Google Doc';
+      if (mime === APP_MIME.SLIDES) return 'Google Slides';
+      if (mime === APP_MIME.SHEETS) return 'Google Sheet';
+      return mime;
+    }
+
+    function errorMessage(error) {
+      return error && error.message ? error.message : String(error || 'Unknown error');
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value || '#');
+    }
   </script>
 </body>
 </html>
