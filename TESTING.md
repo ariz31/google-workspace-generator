@@ -23,6 +23,8 @@ Use this checklist after pushing or copying the root files into Google Apps Scri
   - `EMAIL`
   - `Log`
 - Confirm a Google Drive demo output folder was created.
+- Confirm `R-DOC-GEN` row 1 contains formula-generated placeholders from row 2 readable labels.
+- Confirm `C-DOC-GEN` column A contains formula-generated placeholders from column B readable labels.
 - Confirm the generated sample rows/columns contain actual Template IDs and Folder IDs.
 
 ## 3. Health check
@@ -34,6 +36,7 @@ Use this checklist after pushing or copying the root files into Google Apps Scri
 ## 4. Row-mode generation
 
 - Go to `R-DOC-GEN`.
+- Edit row 2 readable labels if needed; row 1 placeholders should update automatically.
 - Select rows 3:5.
 - Open **Productivity Suite > Open Generator Sidebar**.
 - Confirm the sidebar detects selected templates.
@@ -45,7 +48,8 @@ Use this checklist after pushing or copying the root files into Google Apps Scri
 ## 5. Column-mode generation
 
 - Go to `C-DOC-GEN`.
-- Select columns B:D.
+- Edit column B readable field names if needed; column A placeholders should update automatically.
+- Select item columns C:E. Column B is only the readable field-name helper.
 - Open the sidebar.
 - Generate in separate-file mode.
 - Confirm output links, Drive files, and log records.
@@ -54,9 +58,9 @@ Use this checklist after pushing or copying the root files into Google Apps Scri
 
 Test these separately:
 
-- Select only Doc template rows or columns, then choose combined Doc/Slide mode.
-- Select only Slide template rows or columns, then choose combined Doc/Slide mode.
-- Select only Sheet template rows or columns, then choose combined Sheet mode.
+- Select only Doc template rows or item columns, then choose combined Doc/Slide mode.
+- Select only Slide template rows or item columns, then choose combined Doc/Slide mode.
+- Select only Sheet template rows or item columns, then choose combined Sheet mode.
 
 Expected result: combined files are created without mixing incompatible template types.
 
@@ -76,6 +80,7 @@ Test intentional bad data:
 - Use an invalid Template ID.
 - Use an invalid Folder ID.
 - Mix Docs and Slides in combined Doc/Slide mode.
+- Select only column B in `C-DOC-GEN`; generation should reject it because column B is not an item column.
 
 Expected result: generation should stop before creating files and show grouped errors.
 
@@ -88,7 +93,7 @@ Expected result: generation should stop before creating files and show grouped e
 
 ## 10. Reset and cancel
 
-- Start a run with multiple selected rows or columns.
+- Start a run with multiple selected rows or item columns.
 - Click Cancel in the sidebar or use **Productivity Suite > Cancel Current Generation**.
 - Then click **Productivity Suite > Reset Generator State**.
 - Confirm a new generation can start normally afterward.
@@ -105,6 +110,7 @@ Expected result: generation should stop before creating files and show grouped e
 Before using with real templates, all of these should pass:
 
 - Demo setup completes.
+- Formula-generated placeholders update from readable labels.
 - Health check passes.
 - Row mode works.
 - Column mode works.
