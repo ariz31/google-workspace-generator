@@ -369,9 +369,13 @@ function writeValuesToSheet_(sheet, values) {
     return;
   }
 
-  const columnCount = Math.max.apply(null, values.map((row) => row.length));
+  const columnCount = Math.max(1, Math.min(
+    LIMITS.maxSheetColumns,
+    Math.max.apply(null, values.map((row) => row.length))
+  ));
+
   const rectangularValues = values.map((row) => {
-    const normalizedRow = row.slice(0, LIMITS.maxSheetColumns);
+    const normalizedRow = row.slice(0, columnCount);
     while (normalizedRow.length < columnCount) {
       normalizedRow.push('');
     }
@@ -422,7 +426,7 @@ function ensureArray_(value) {
 
 /**
  * @param {*} values
- * @return {Array<Array<string|number|boolean|Date>>}
+ * @return {Array<Array<string|number|boolean>>}
  * @private
  */
 function normalizeSheetValues_(values) {
