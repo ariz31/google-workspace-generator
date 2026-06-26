@@ -1,0 +1,3 @@
+function pingAutoProgress() {
+  return true;
+}
