@@ -1,43 +1,35 @@
 # Development Guide
 
+This project is intended to be installed directly inside Google Apps Script. There is no local tool setup requirement.
+
 ## Prerequisites
 
-- Node.js
-- Google Apps Script access
-- clasp, installed with `npm install`
+- Google account with Apps Script access
+- A Google Sheet for the spreadsheet-bound generator
+- Access to the Drive templates and destination folders you plan to use
 
-## Local setup
+## Manual setup
 
-```bash
-npm install
-npm run clasp:login
-npx clasp create --type sheets --title "Google Workspace Generator" --rootDir .
-npm run push
-npm run open
-```
-
-For an existing Apps Script project, copy `.clasp.json.example` to `.clasp.json`, replace `YOUR_SCRIPT_ID_HERE`, then run `npm run push`.
-
-## Common commands
-
-```bash
-npm run push
-npm run pull
-npm run open
-npm run status
-npm run deploy
-```
+1. Create or open a Google Sheet.
+2. Open **Extensions > Apps Script**.
+3. Copy the root `Code.gs` into the Apps Script `Code.gs` file.
+4. Add an HTML file named `Sidebar` and copy `Sidebar.html` into it.
+5. Add an HTML file named `Index` and copy `Index.html` into it.
+6. Add or update the Apps Script manifest with `appsscript.json`.
+7. Save the project.
+8. Run `setupGeneratorSheets()` once and approve permissions.
+9. Reload the spreadsheet and use the **Productivity Suite** menu.
 
 ## Root files
 
-The canonical Apps Script files are now at the repository root:
+The canonical Apps Script files are at the repository root:
 
 - `Code.gs`
 - `Sidebar.html`
 - `Index.html`
 - `appsscript.json`
 
-Do not use a `src/` root for clasp unless you intentionally restructure the project again.
+Keep backend helper functions inside `Code.gs` unless the project is intentionally restructured later.
 
 ## Manual deployment
 
