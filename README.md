@@ -2,7 +2,7 @@
 
 Google Workspace Generator is a Google Apps Script productivity suite for creating and batch-generating Google Workspace files.
 
-This repository is now documented with a **non-technical, copy-paste setup first**, similar to the peer-evaluation project. The existing app features remain intact.
+This repository is documented with a **non-technical, copy-paste setup first**, similar to the peer-evaluation project. The existing app features remain intact.
 
 ## Files to copy into Apps Script
 
@@ -107,12 +107,6 @@ Deploy the same project as a web app:
 5. Choose the access level appropriate for your workspace.
 
 `Index.html` calls `getDefaultWorkspaceConfig()` and `generateWorkspace(config)` from `Code.gs`.
-
-## Advanced developer setup
-
-The project still includes optional developer files such as `package.json`, `.clasp.json.example`, and docs. Non-technical users do not need them.
-
-Use clasp only if you intentionally want command-line deployment.
 
 ## Notes
 
