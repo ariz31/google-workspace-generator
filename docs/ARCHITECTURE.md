@@ -71,7 +71,7 @@ Docs and Slides also attempt to replace image placeholders when the value is an 
 - Triggers are cleaned up before a new run and after completion or cancellation.
 - Logging failures are swallowed so a bad log sheet does not break file generation.
 - `Sidebar.html` escapes rendered output links and messages.
-- Root files are the canonical clasp source; the old `src/` scaffold has been removed.
+- Root files are the canonical Apps Script source, and the old `src/` scaffold has been removed.
 
 ## Extension points
 
